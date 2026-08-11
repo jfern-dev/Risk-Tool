@@ -10,9 +10,19 @@ const RiskTimeline = ({ risk }) => {
   }
 
   // Initial score from DB
-  const initialDate = new Date(risk.createdAt).getTime();
-  let currentTargetL = risk.initialLikelihood || risk.likelihood;
-  let currentTargetI = risk.initialImpact || risk.impact;
+  const initialDate = (risk.discoveredDate ? new Date(risk.discoveredDate) : new Date(risk.createdAt)).getTime();
+  let initialL = risk.initialLikelihood;
+  let initialI = risk.initialImpact;
+
+  if (initialL === undefined) {
+    const totalLikelihoodReduction = risk.burndownSteps.filter(s => s.isCompleted).reduce((sum, s) => sum + (s.likelihoodReduction || 0), 0);
+    const totalImpactReduction = risk.burndownSteps.filter(s => s.isCompleted).reduce((sum, s) => sum + (s.impactReduction || 0), 0);
+    initialL = Math.min(5, risk.likelihood + totalLikelihoodReduction);
+    initialI = Math.min(5, risk.impact + totalImpactReduction);
+  }
+
+  let currentTargetL = initialL;
+  let currentTargetI = initialI;
   
   // Gather all target events (projections)
   const targetEvents = risk.burndownSteps.map(s => ({
@@ -36,12 +46,12 @@ const RiskTimeline = ({ risk }) => {
   points.push({
     date: initialDate,
     targetScore: currentTargetL * currentTargetI,
-    actualScore: (risk.initialLikelihood || risk.likelihood) * (risk.initialImpact || risk.impact),
+    actualScore: initialL * initialI,
     label: 'Identified',
   });
 
-  let currentActualL = risk.initialLikelihood || risk.likelihood;
-  let currentActualI = risk.initialImpact || risk.impact;
+  let currentActualL = initialL;
+  let currentActualI = initialI;
 
   allEvents.forEach(event => {
     if (event.isTarget) {
@@ -56,7 +66,7 @@ const RiskTimeline = ({ risk }) => {
     points.push({
       date: event.date,
       targetScore: currentTargetL * currentTargetI,
-      actualScore: currentActualL * currentActualI,
+      actualScore: event.date > Date.now() ? null : currentActualL * currentActualI,
       label: event.step.description,
       isTargetEvent: event.isTarget,
       isActualEvent: event.isActual,
@@ -104,7 +114,7 @@ const RiskTimeline = ({ risk }) => {
           <XAxis 
             dataKey="date" 
             type="number" 
-            domain={['dataMin', 'dataMax']}
+            domain={[(dataMin) => dataMin - (7 * 24 * 60 * 60 * 1000), 'dataMax']}
             tickFormatter={formatXAxis} 
             stroke="var(--text-muted)"
             fontSize={11}

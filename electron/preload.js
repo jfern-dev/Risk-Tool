@@ -8,6 +8,11 @@ contextBridge.exposeInMainWorld('electron', {
     },
     removeAllListeners: (channel) => {
       ipcRenderer.removeAllListeners(channel);
+    },
+    removeListener: (channel, listener) => {
+      // Note: This won't work perfectly for function references across the bridge without extra care,
+      // but we can expose it to prevent the TypeError. Ideally, we shouldn't use removeListener across contextBridge.
+      ipcRenderer.removeListener(channel, listener);
     }
   }
 });

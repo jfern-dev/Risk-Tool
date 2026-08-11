@@ -101,6 +101,21 @@ h1, h2, h3 {
 .score-high { background: var(--danger); }
 .score-extreme { background: #991B1B; }
 
+/* Color codes for 5x5 Opportunity matrix (Higher = Darker Blue) */
+.score-opp-low { background: #BFDBFE; color: #1E3A8A !important; }
+.score-opp-med { background: #60A5FA; color: #EFF6FF !important; }
+.score-opp-high { background: #2563EB; }
+.score-opp-extreme { background: #1E3A8A; }
+
+.risk-matrix-1x5 {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+  background: var(--border);
+  padding: 4px;
+  border-radius: 8px;
+}
+
 .modal-overlay {
   position: fixed;
   top: 0;

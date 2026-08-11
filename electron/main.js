@@ -20,6 +20,7 @@ function encryptData(text) {
 
 function decryptData(text) {
   try {
+
     const parts = text.split(':');
     if (parts.length === 3) {
       const iv = Buffer.from(parts[0], 'hex');
@@ -45,10 +46,14 @@ let mainWindow;
 let currentFilePath = null;
 let workDir = null;
 
-// Initial state
 let appData = {
   risks: [],
-  fields: []
+  fields: [],
+  snapshots: [],
+  sempTables: {
+    table7: [],
+    table8: []
+  }
 };
 
 // Generate an ID
@@ -74,11 +79,21 @@ async function cleanupWorkDir() {
 
 app.on('will-quit', () => cleanupWorkDir());
 
-const saveToFile = async () => {
-  if (!currentFilePath) {
+const autoSaveToTemp = async () => {
+  try {
+    const jsonStr = JSON.stringify(appData, null, 2);
+    const encryptedStr = encryptData(jsonStr);
+    await fs.writeFile(path.join(workDir, 'data.json'), encryptedStr, 'utf-8');
+  } catch (error) {
+    console.error('Error auto-saving to temp:', error);
+  }
+};
+
+const handleSave = async (isSaveAs = false) => {
+  if (!currentFilePath || isSaveAs) {
     const result = await dialog.showSaveDialog(mainWindow, {
       title: 'Save ERM Data',
-      defaultPath: 'erm-data.erm',
+      defaultPath: currentFilePath || 'erm-data.erm',
       filters: [
         { name: 'ERM Encrypted Files', extensions: ['erm', 'json'] },
         { name: 'All Files', extensions: ['*'] }
@@ -89,15 +104,13 @@ const saveToFile = async () => {
   }
   
   try {
-    const jsonStr = JSON.stringify(appData, null, 2);
-    const encryptedStr = encryptData(jsonStr);
-    await fs.writeFile(path.join(workDir, 'data.json'), encryptedStr, 'utf-8');
+    await autoSaveToTemp();
     
     const zip = new AdmZip();
     zip.addLocalFolder(workDir);
     zip.writeZip(currentFilePath);
     
-    mainWindow.setTitle(`ERM Tool - ${currentFilePath}`);
+    mainWindow.setTitle(`ERM Tool - ${path.basename(currentFilePath)}`);
     return true;
   } catch (error) {
     dialog.showErrorBox('Save Error', `Could not save file: ${error.message}`);
@@ -116,11 +129,13 @@ const handleOpenFile = async () => {
   });
   if (!result.canceled && result.filePaths.length > 0) {
     try {
+
       const filePath = result.filePaths[0];
       await initWorkDir();
       
       let isZip = false;
       try {
+
         const zip = new AdmZip(filePath);
         zip.extractAllTo(workDir, true);
         isZip = true;
@@ -139,7 +154,9 @@ const handleOpenFile = async () => {
       const parsed = JSON.parse(decryptedStr);
       appData = {
         risks: parsed.risks || [],
-        fields: parsed.fields || []
+        fields: parsed.fields || [],
+        snapshots: parsed.snapshots || [],
+        sempTables: parsed.sempTables || { table7: [], table8: [] }
       };
       
       currentFilePath = filePath;
@@ -155,7 +172,12 @@ const handleOpenFile = async () => {
 };
 
 const handleNewFile = async () => {
-  appData = { risks: [], fields: [] };
+  appData = { 
+    risks: [], 
+    fields: [], 
+    snapshots: [],
+    sempTables: { table7: [], table8: [] }
+  };
   currentFilePath = null;
   await initWorkDir();
   mainWindow.setTitle('ERM Tool - Untitled');
@@ -180,17 +202,12 @@ const createMenu = () => {
         {
           label: 'Save',
           accelerator: 'CmdOrCtrl+S',
-          click: () => saveToFile()
+          click: () => handleSave()
         },
         {
           label: 'Save As...',
           accelerator: 'CmdOrCtrl+Shift+S',
-          click: async () => {
-            const oldPath = currentFilePath;
-            currentFilePath = null; // force prompt
-            const saved = await saveToFile();
-            if (!saved) currentFilePath = oldPath;
-          }
+          click: () => handleSave(true)
         },
         { type: 'separator' },
         { role: 'quit' }
@@ -262,6 +279,14 @@ ipcMain.handle('api-new-file', async () => {
   return true;
 });
 
+ipcMain.handle('api-save', async () => {
+  return await handleSave();
+});
+
+ipcMain.handle('api-save-as', async () => {
+  return await handleSave(true);
+});
+
 ipcMain.handle('api-open-file', async () => {
   return await handleOpenFile();
 });
@@ -292,7 +317,7 @@ ipcMain.handle('api-add-attachment', async (event, riskId) => {
   };
   risk.attachments.push(newAttachment);
   
-  await saveToFile();
+  await autoSaveToTemp();
   return newAttachment;
 });
 
@@ -314,12 +339,41 @@ ipcMain.handle('api-delete-attachment', async (event, riskId, attachmentId) => {
   const destPath = path.join(workDir, 'attachments', attachment.filename);
   await fs.unlink(destPath).catch(() => {}); // Ignore if file already gone
   
-  await saveToFile();
+  await autoSaveToTemp();
   return { success: true };
 });
 
 ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => {
   try {
+
+    // GET /api/sempTables
+    if (reqPath === '/api/sempTables' && method === 'GET') {
+      return appData.sempTables;
+    }
+    // PUT /api/sempTables
+    if (reqPath === '/api/sempTables' && method === 'PUT') {
+      appData.sempTables = body;
+      await autoSaveToTemp();
+      return appData.sempTables;
+    }
+
+    // GET /api/snapshots
+    if (reqPath === '/api/snapshots' && method === 'GET') {
+      return appData.snapshots;
+    }
+    // POST /api/snapshots
+    if (reqPath === '/api/snapshots' && method === 'POST') {
+      const newSnapshot = {
+        id: generateId(appData.snapshots),
+        note: body.note || 'Manual Snapshot',
+        date: new Date().toISOString(),
+        risks: JSON.parse(JSON.stringify(appData.risks)) // deep copy
+      };
+      appData.snapshots.push(newSnapshot);
+      await autoSaveToTemp();
+      return newSnapshot;
+    }
+
     // GET /api/risks
     if (reqPath === '/api/risks' && method === 'GET') {
       return appData.risks;
@@ -329,21 +383,44 @@ ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => 
       const newRisk = {
         id: generateId(appData.risks),
         ...body,
+        initialLikelihood: body.likelihood || 1,
+        initialImpact: body.impact || 1,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
       appData.risks.push(newRisk);
-      await saveToFile();
+      await autoSaveToTemp();
       return newRisk;
     }
+    
+    // POST /api/risks/:id/snapshots
+    let match = reqPath.match(/^\/api\/risks\/(\d+)\/snapshots$/);
+    if (match && method === 'POST') {
+      const riskId = parseInt(match[1]);
+      const risk = appData.risks.find(r => r.id === riskId);
+      if (!risk) throw new Error('Risk not found');
+      if (!risk.snapshots) risk.snapshots = [];
+      const riskCopy = JSON.parse(JSON.stringify(risk));
+      delete riskCopy.snapshots;
+      const newSnapshot = {
+        id: generateId(risk.snapshots),
+        note: body.note || 'Manual Item Snapshot',
+        date: new Date().toISOString(),
+        data: riskCopy
+      };
+      risk.snapshots.push(newSnapshot);
+      await autoSaveToTemp();
+      return newSnapshot;
+    }
+
     // PUT /api/risks/:id
-    let match = reqPath.match(/^\/api\/risks\/(\d+)$/);
+    match = reqPath.match(/^\/api\/risks\/(\d+)$/);
     if (match && method === 'PUT') {
       const id = parseInt(match[1]);
       const idx = appData.risks.findIndex(r => r.id === id);
       if (idx === -1) throw new Error('Risk not found');
       appData.risks[idx] = { ...appData.risks[idx], ...body, updatedAt: new Date().toISOString() };
-      await saveToFile();
+      await autoSaveToTemp();
       return appData.risks[idx];
     }
     
@@ -356,7 +433,7 @@ ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => 
       if (!risk.customFields) risk.customFields = [];
       const newCf = { id: generateId(risk.customFields), riskId, ...body };
       risk.customFields.push(newCf);
-      await saveToFile();
+      await autoSaveToTemp();
       return newCf;
     }
 
@@ -376,7 +453,7 @@ ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => 
     if (reqPath === '/api/fields' && method === 'POST') {
       const newField = { id: generateId(appData.fields), ...body, createdAt: new Date().toISOString() };
       appData.fields.push(newField);
-      await saveToFile();
+      await autoSaveToTemp();
       return newField;
     }
     // DELETE /api/fields/:id
@@ -384,7 +461,7 @@ ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => 
     if (match && method === 'DELETE') {
       const id = parseInt(match[1]);
       appData.fields = appData.fields.filter(f => f.id !== id);
-      await saveToFile();
+      await autoSaveToTemp();
       return { success: true };
     }
 
@@ -397,7 +474,7 @@ ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => 
       if (!risk.burndownSteps) risk.burndownSteps = [];
       const newStep = { id: generateId(risk.burndownSteps), riskId, ...body, isCompleted: false };
       risk.burndownSteps.push(newStep);
-      await saveToFile();
+      await autoSaveToTemp();
       return newStep;
     }
     
@@ -410,7 +487,7 @@ ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => 
       const step = risk?.burndownSteps?.find(s => s.id === stepId);
       if (!step) throw new Error('Step not found');
       Object.assign(step, body);
-      await saveToFile();
+      await autoSaveToTemp();
       return step;
     }
     
@@ -425,7 +502,7 @@ ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => 
       Object.assign(step, body, { isCompleted: true, completedAt: new Date().toISOString() });
       risk.likelihood = body.actualLikelihood;
       risk.impact = body.actualImpact;
-      await saveToFile();
+      await autoSaveToTemp();
       return { risk, step };
     }
 
@@ -440,7 +517,7 @@ ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => 
       if (!step.customFields) step.customFields = [];
       const newCf = { id: generateId(step.customFields), burndownStepId: stepId, ...body };
       step.customFields.push(newCf);
-      await saveToFile();
+      await autoSaveToTemp();
       return newCf;
     }
 

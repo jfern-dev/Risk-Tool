@@ -10,6 +10,7 @@ const FIELD_TYPES = [
 
 const AdminPage = () => {
   const [fields, setFields] = useState([]);
+  const [sempTables, setSempTables] = useState({ table7: [], table8: [] });
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('risk');
 
@@ -19,15 +20,24 @@ const AdminPage = () => {
   const [newRequired, setNewRequired] = useState(false);
   const [adding, setAdding] = useState(false);
 
+  // New SEMP option form
+  const [newSempTableType, setNewSempTableType] = useState('table7');
+  const [newSempOption, setNewSempOption] = useState('');
+  const [newSempColor, setNewSempColor] = useState('#3b82f6'); // default blue
+
   useEffect(() => {
-    fetchFields();
+    fetchData();
   }, []);
 
-  const fetchFields = async () => {
+  const fetchData = async () => {
     try {
-      const res = await apiFetch('http://localhost:3000/api/fields');
-      const data = await res.json();
-      if (Array.isArray(data)) setFields(data);
+      const resFields = await apiFetch('http://localhost:3000/api/fields');
+      const dataFields = await resFields.json();
+      if (Array.isArray(dataFields)) setFields(dataFields);
+
+      const resSemp = await apiFetch('http://localhost:3000/api/sempTables');
+      const dataSemp = await resSemp.json();
+      if (dataSemp && !dataSemp.error) setSempTables(dataSemp);
     } catch (err) {
       console.error(err);
     } finally {
@@ -35,7 +45,7 @@ const AdminPage = () => {
     }
   };
 
-  const handleAdd = async (e) => {
+  const handleAddField = async (e) => {
     e.preventDefault();
     if (!newName.trim()) return;
     setAdding(true);
@@ -64,13 +74,62 @@ const AdminPage = () => {
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDeleteField = async (id) => {
     if (!window.confirm('Delete this custom field definition? This will not remove data already saved.')) return;
-
     try {
       const res = await apiFetch(`http://localhost:3000/api/fields/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete');
       setFields(fields.filter(f => f.id !== id));
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const handleAddSempOption = async (e) => {
+    e.preventDefault();
+    if (!newSempOption.trim()) return;
+    setAdding(true);
+
+    try {
+      const updatedTables = { ...sempTables };
+      updatedTables[newSempTableType].push({
+        id: Date.now(),
+        name: newSempOption.trim(),
+        color: newSempColor
+      });
+
+      const res = await apiFetch('http://localhost:3000/api/sempTables', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedTables)
+      });
+      if (!res.ok) throw new Error('Failed to save SEMP tables');
+      
+      const savedTables = await res.json();
+      setSempTables(savedTables);
+      setNewSempOption('');
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const handleDeleteSempOption = async (tableType, optionId) => {
+    if (!window.confirm('Delete this SEMP option?')) return;
+    try {
+      const updatedTables = { ...sempTables };
+      updatedTables[tableType] = updatedTables[tableType].filter(opt => opt.id !== optionId);
+
+      const res = await apiFetch('http://localhost:3000/api/sempTables', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedTables)
+      });
+      if (!res.ok) throw new Error('Failed to save SEMP tables');
+      
+      const savedTables = await res.json();
+      setSempTables(savedTables);
     } catch (err) {
       alert(err.message);
     }
@@ -86,7 +145,7 @@ const AdminPage = () => {
     <div className="container">
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
         <Settings size={28} color="var(--primary)" />
-        <h2 style={{ margin: 0 }}>Admin — Custom Fields</h2>
+        <h2 style={{ margin: 0 }}>Admin Panel</h2>
       </div>
 
       {/* Tabs */}
@@ -101,7 +160,6 @@ const AdminPage = () => {
             borderRadius: '8px 0 0 8px',
             cursor: 'pointer',
             fontWeight: 600,
-            fontSize: '1rem',
             transition: 'all 0.2s ease'
           }}
         >
@@ -115,133 +173,162 @@ const AdminPage = () => {
             color: activeTab === 'burndown' ? '#fff' : 'var(--text-muted)',
             border: '1px solid var(--border)',
             borderLeft: 'none',
-            borderRadius: '0 8px 8px 0',
+            borderRight: 'none',
             cursor: 'pointer',
             fontWeight: 600,
-            fontSize: '1rem',
             transition: 'all 0.2s ease'
           }}
         >
           Burndown Fields ({burndownFields.length})
         </button>
+        <button
+          onClick={() => setActiveTab('semp')}
+          style={{
+            padding: '0.75rem 1.5rem',
+            background: activeTab === 'semp' ? 'var(--primary)' : 'transparent',
+            color: activeTab === 'semp' ? '#fff' : 'var(--text-muted)',
+            border: '1px solid var(--border)',
+            borderRadius: '0 8px 8px 0',
+            cursor: 'pointer',
+            fontWeight: 600,
+            transition: 'all 0.2s ease'
+          }}
+        >
+          SEMP Picklists
+        </button>
       </div>
 
-      {/* Existing Fields */}
-      <div className="card" style={{ marginBottom: '2rem' }}>
-        <h3 style={{ marginTop: 0 }}>
-          {activeTab === 'risk' ? 'Risk' : 'Burndown Step'} Custom Fields
-        </h3>
+      {/* CUSTOM FIELDS CONTENT */}
+      {activeTab !== 'semp' && (
+        <>
+          <div className="card" style={{ marginBottom: '2rem' }}>
+            <h3 style={{ marginTop: 0 }}>
+              {activeTab === 'risk' ? 'Risk' : 'Burndown Step'} Custom Fields
+            </h3>
+            {currentFields.length === 0 ? (
+              <p style={{ color: 'var(--text-muted)' }}>No custom fields defined yet.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {currentFields.map(field => (
+                  <div
+                    key={field.id}
+                    style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      padding: '1rem', background: 'rgba(15, 23, 42, 0.5)',
+                      borderRadius: '8px', border: '1px solid var(--border)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                      <span style={{ fontWeight: 600, fontSize: '1.05rem' }}>{field.name}</span>
+                      <span style={{ fontSize: '0.8rem', padding: '2px 8px', borderRadius: '12px', background: 'var(--border)', textTransform: 'capitalize' }}>
+                        {field.fieldType}
+                      </span>
+                      {field.required && (
+                        <span style={{ fontSize: '0.8rem', padding: '2px 8px', borderRadius: '12px', background: 'var(--danger)', color: '#fff' }}>
+                          Required
+                        </span>
+                      )}
+                    </div>
+                    <button onClick={() => handleDeleteField(field.id)} style={{ background: 'transparent', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '0.25rem' }}>
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
-        {currentFields.length === 0 ? (
-          <p style={{ color: 'var(--text-muted)' }}>No custom fields defined yet for {activeTab === 'risk' ? 'risks' : 'burndown steps'}.</p>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {currentFields.map(field => (
-              <div
-                key={field.id}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '1rem',
-                  background: 'rgba(15, 23, 42, 0.5)',
-                  borderRadius: '8px',
-                  border: '1px solid var(--border)'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                  <span style={{ fontWeight: 600, fontSize: '1.05rem' }}>{field.name}</span>
-                  <span style={{
-                    fontSize: '0.8rem',
-                    padding: '2px 8px',
-                    borderRadius: '12px',
-                    background: 'var(--border)',
-                    textTransform: 'capitalize'
-                  }}>
-                    {field.fieldType}
-                  </span>
-                  {field.required && (
-                    <span style={{
-                      fontSize: '0.8rem',
-                      padding: '2px 8px',
-                      borderRadius: '12px',
-                      background: 'var(--danger)',
-                      color: '#fff'
-                    }}>
-                      Required
-                    </span>
-                  )}
+          <div className="card">
+            <h3 style={{ marginTop: 0 }}>Add New Field</h3>
+            <form onSubmit={handleAddField} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1rem' }}>
+                <div>
+                  <label className="form-label">Field Name</label>
+                  <input required type="text" className="form-input" value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. Owner, Department" />
                 </div>
-                <button
-                  onClick={() => handleDelete(field.id)}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: 'var(--danger)',
-                    cursor: 'pointer',
-                    padding: '0.25rem'
-                  }}
-                  title="Delete field"
-                >
-                  <Trash2 size={18} />
+                <div>
+                  <label className="form-label">Field Type</label>
+                  <select className="form-input" value={newType} onChange={e => setNewType(e.target.value)}>
+                    {FIELD_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <input type="checkbox" id="required-check" checked={newRequired} onChange={e => setNewRequired(e.target.checked)} style={{ accentColor: 'var(--primary)' }} />
+                <label htmlFor="required-check" style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Required field</label>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button type="submit" className="btn" disabled={adding}>
+                  <PlusCircle size={16} style={{ marginRight: '6px' }} />
+                  {adding ? 'Adding...' : 'Add Field'}
                 </button>
+              </div>
+            </form>
+          </div>
+        </>
+      )}
+
+      {/* SEMP TABLES CONTENT */}
+      {activeTab === 'semp' && (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', marginBottom: '2rem' }}>
+            {['table7', 'table8'].map(tableType => (
+              <div key={tableType} className="card">
+                <h3 style={{ marginTop: 0 }}>SEMP {tableType === 'table7' ? 'Table 7' : 'Table 8'} Options</h3>
+                {!sempTables[tableType] || sempTables[tableType].length === 0 ? (
+                  <p style={{ color: 'var(--text-muted)' }}>No options defined yet.</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {sempTables[tableType].map(opt => (
+                      <div key={opt.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', background: 'rgba(15, 23, 42, 0.5)', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                          <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: opt.color }}></div>
+                          <span style={{ fontWeight: 600 }}>{opt.name}</span>
+                        </div>
+                        <button onClick={() => handleDeleteSempOption(tableType, opt.id)} style={{ background: 'transparent', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '0.25rem' }}>
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>
-        )}
-      </div>
 
-      {/* Add New Field */}
-      <div className="card">
-        <h3 style={{ marginTop: 0 }}>Add New {activeTab === 'risk' ? 'Risk' : 'Burndown'} Field</h3>
-        <form onSubmit={handleAdd} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1rem' }}>
-            <div>
-              <label className="form-label">Field Name</label>
-              <input
-                required
-                type="text"
-                className="form-input"
-                value={newName}
-                onChange={e => setNewName(e.target.value)}
-                placeholder="e.g. Owner, Department, Priority"
-              />
-            </div>
-            <div>
-              <label className="form-label">Field Type</label>
-              <select
-                className="form-input"
-                value={newType}
-                onChange={e => setNewType(e.target.value)}
-              >
-                {FIELD_TYPES.map(t => (
-                  <option key={t.value} value={t.value}>{t.label}</option>
-                ))}
-              </select>
-            </div>
+          <div className="card">
+            <h3 style={{ marginTop: 0 }}>Add SEMP Option</h3>
+            <form onSubmit={handleAddSempOption} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr', gap: '1rem' }}>
+                <div>
+                  <label className="form-label">Target Table</label>
+                  <select className="form-input" value={newSempTableType} onChange={e => setNewSempTableType(e.target.value)}>
+                    <option value="table7">SEMP Table 7</option>
+                    <option value="table8">SEMP Table 8</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="form-label">Option Name</label>
+                  <input required type="text" className="form-input" value={newSempOption} onChange={e => setNewSempOption(e.target.value)} placeholder="e.g. Schedule Risk Level 1" />
+                </div>
+                <div>
+                  <label className="form-label">Color (Hex)</label>
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <input type="color" value={newSempColor} onChange={e => setNewSempColor(e.target.value)} style={{ width: '40px', height: '40px', padding: '0', border: 'none', background: 'transparent', cursor: 'pointer' }} />
+                    <input required type="text" className="form-input" value={newSempColor} onChange={e => setNewSempColor(e.target.value)} placeholder="#Hex" />
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button type="submit" className="btn" disabled={adding}>
+                  <PlusCircle size={16} style={{ marginRight: '6px' }} />
+                  {adding ? 'Adding...' : 'Add Option'}
+                </button>
+              </div>
+            </form>
           </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <input
-              type="checkbox"
-              id="required-check"
-              checked={newRequired}
-              onChange={e => setNewRequired(e.target.checked)}
-              style={{ accentColor: 'var(--primary)' }}
-            />
-            <label htmlFor="required-check" style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-              Required field
-            </label>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <button type="submit" className="btn" disabled={adding}>
-              <PlusCircle size={16} style={{ marginRight: '6px' }} />
-              {adding ? 'Adding...' : 'Add Field'}
-            </button>
-          </div>
-        </form>
-      </div>
+        </>
+      )}
     </div>
   );
 };
