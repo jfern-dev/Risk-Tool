@@ -8,10 +8,13 @@ const FIELD_TYPES = [
   { value: 'date', label: 'Date' },
 ];
 
-const AdminPage = () => {
+const AdminPage = ({ isAdminAuthenticated, setIsAdminAuthenticated }) => {
   const [fields, setFields] = useState([]);
   const [sempTables, setSempTables] = useState({ table7: [], table8: [] });
   const [loading, setLoading] = useState(true);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [authError, setAuthError] = useState('');
   const [activeTab, setActiveTab] = useState('risk');
 
   // New field form
@@ -26,8 +29,37 @@ const AdminPage = () => {
   const [newSempColor, setNewSempColor] = useState('#3b82f6'); // default blue
 
   useEffect(() => {
+    checkAuthStatus();
     fetchData();
   }, []);
+
+  const checkAuthStatus = async () => {
+    try {
+      const hasPassword = await window.electron.ipcRenderer.invoke('api-has-password');
+      if (!hasPassword) {
+        setIsAdminAuthenticated(true);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setCheckingAuth(false);
+    }
+  };
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setAuthError('');
+    try {
+      const isValid = await window.electron.ipcRenderer.invoke('api-verify-password', passwordInput);
+      if (isValid) {
+        setIsAdminAuthenticated(true);
+      } else {
+        setAuthError('Incorrect password');
+      }
+    } catch (err) {
+      setAuthError('Error verifying password');
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -139,7 +171,41 @@ const AdminPage = () => {
   const burndownFields = fields.filter(f => f.entityType === 'burndown');
   const currentFields = activeTab === 'risk' ? riskFields : burndownFields;
 
-  if (loading) return <div className="container" style={{ textAlign: 'center', padding: '4rem' }}>Loading...</div>;
+
+  if (loading || checkingAuth) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', padding: '3rem' }}>
+        <p style={{ color: 'var(--text-muted)' }}>Loading...</p>
+      </div>
+    );
+  }
+
+  if (!isAdminAuthenticated) {
+    return (
+      <div className="container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
+        <div className="card" style={{ maxWidth: '400px', width: '100%' }}>
+          <h2 style={{ marginTop: 0, marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary)' }}>
+            <Settings size={24} />
+            Admin Login
+          </h2>
+          <form onSubmit={handleLogin}>
+            <div style={{ marginBottom: '1rem' }}>
+              <label className="form-label">Password</label>
+              <input
+                type="password"
+                className="form-input"
+                value={passwordInput}
+                onChange={e => setPasswordInput(e.target.value)}
+                autoFocus
+              />
+            </div>
+            {authError && <p style={{ color: 'var(--danger)', fontSize: '0.9rem', marginBottom: '1rem' }}>{authError}</p>}
+            <button type="submit" className="btn" style={{ width: '100%' }}>Login</button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container">

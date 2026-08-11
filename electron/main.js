@@ -171,13 +171,16 @@ const handleOpenFile = async () => {
   return false;
 };
 
-const handleNewFile = async () => {
+const handleNewFile = async (password = null) => {
   appData = { 
     risks: [], 
     fields: [], 
     snapshots: [],
     sempTables: { table7: [], table8: [] }
   };
+  if (password) {
+    appData.adminPassword = password;
+  }
   currentFilePath = null;
   await initWorkDir();
   mainWindow.setTitle('ERM Tool - Untitled');
@@ -274,9 +277,17 @@ app.on('window-all-closed', () => {
 });
 
 // IPC Handlers: Mini-router
-ipcMain.handle('api-new-file', async () => {
-  await handleNewFile();
+ipcMain.handle('api-new-file', async (event, password) => {
+  await handleNewFile(password);
   return true;
+});
+
+ipcMain.handle('api-has-password', async () => {
+  return !!appData.adminPassword;
+});
+
+ipcMain.handle('api-verify-password', async (event, password) => {
+  return appData.adminPassword === password;
 });
 
 ipcMain.handle('api-save', async () => {

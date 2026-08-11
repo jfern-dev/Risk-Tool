@@ -26,6 +26,8 @@ const Dashboard = () => {
   const [activeHistoryRisk, setActiveHistoryRisk] = useState(null);
   const [isGlobalSnapshotModalOpen, setIsGlobalSnapshotModalOpen] = useState(false);
   const [expandedIds, setExpandedIds] = useState(new Set());
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
 
   const toggleExpand = (id) => {
     setExpandedIds(prev => {
@@ -184,7 +186,7 @@ const Dashboard = () => {
             value=""
             onChange={(e) => {
               const action = e.target.value;
-              if (action === 'new') window.electron.ipcRenderer.invoke('api-new-file');
+              if (action === 'new') setShowPasswordModal(true);
               if (action === 'open') window.electron.ipcRenderer.invoke('api-open-file');
               if (action === 'save') window.electron.ipcRenderer.invoke('api-save');
               if (action === 'save-as') window.electron.ipcRenderer.invoke('api-save-as');
@@ -427,6 +429,37 @@ const Dashboard = () => {
             setActiveAttachmentsRisk(updatedRisk);
           }}
         />
+      )}
+
+      {showPasswordModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000
+        }}>
+          <div className="card" style={{ maxWidth: '400px', width: '100%', padding: '2rem' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '1rem', color: 'var(--primary)' }}>Set Admin Password</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
+              Create a password to protect the Admin settings for this new workspace.
+            </p>
+            <input
+              type="password"
+              className="form-input"
+              style={{ marginBottom: '1.5rem' }}
+              value={newPassword}
+              onChange={e => setNewPassword(e.target.value)}
+              placeholder="Enter password..."
+              autoFocus
+            />
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+              <button className="btn" style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)' }} onClick={() => setShowPasswordModal(false)}>Cancel</button>
+              <button className="btn" onClick={() => {
+                window.electron.ipcRenderer.invoke('api-new-file', newPassword);
+                setShowPasswordModal(false);
+                setNewPassword('');
+              }}>Create Workspace</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
