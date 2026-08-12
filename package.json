@@ -1,7 +1,7 @@
 {
   "name": "risk-tool",
   "private": true,
-  "version": "4.0.0",
+  "version": "5.0.0",
   "repository": "https://github.com/jfern-dev/ERM-Tool",
   "main": "electron/main.js",
   "type": "module",
