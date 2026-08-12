@@ -16,6 +16,8 @@ const AdminPage = ({ isAdminAuthenticated, setIsAdminAuthenticated }) => {
   const [passwordInput, setPasswordInput] = useState('');
   const [authError, setAuthError] = useState('');
   const [activeTab, setActiveTab] = useState('risk');
+  const [dashboardSettings, setDashboardSettings] = useState({ hiddenFields: [] });
+  const [savingSettings, setSavingSettings] = useState(false);
 
   // New field form
   const [newName, setNewName] = useState('');
@@ -70,6 +72,10 @@ const AdminPage = ({ isAdminAuthenticated, setIsAdminAuthenticated }) => {
       const resSemp = await apiFetch('http://localhost:3000/api/sempTables');
       const dataSemp = await resSemp.json();
       if (dataSemp && !dataSemp.error) setSempTables(dataSemp);
+
+      const resSettings = await apiFetch('http://localhost:3000/api/dashboardSettings');
+      const dataSettings = await resSettings.json();
+      if (dataSettings && !dataSettings.error) setDashboardSettings(dataSettings);
     } catch (err) {
       console.error(err);
     } finally {
@@ -171,6 +177,32 @@ const AdminPage = ({ isAdminAuthenticated, setIsAdminAuthenticated }) => {
   const burndownFields = fields.filter(f => f.entityType === 'burndown');
   const currentFields = activeTab === 'risk' ? riskFields : burndownFields;
 
+  const handleToggleDashboardField = async (fieldName) => {
+    setSavingSettings(true);
+    try {
+      const isHidden = dashboardSettings.hiddenFields.includes(fieldName);
+      const newHiddenFields = isHidden
+        ? dashboardSettings.hiddenFields.filter(f => f !== fieldName)
+        : [...dashboardSettings.hiddenFields, fieldName];
+      
+      const newSettings = { ...dashboardSettings, hiddenFields: newHiddenFields };
+      
+      const res = await apiFetch('http://localhost:3000/api/dashboardSettings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newSettings)
+      });
+      
+      if (!res.ok) throw new Error('Failed to save settings');
+      const savedSettings = await res.json();
+      setDashboardSettings(savedSettings);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
 
   if (loading || checkingAuth) {
     return (
@@ -254,7 +286,7 @@ const AdminPage = ({ isAdminAuthenticated, setIsAdminAuthenticated }) => {
             background: activeTab === 'semp' ? 'var(--primary)' : 'transparent',
             color: activeTab === 'semp' ? '#fff' : 'var(--text-muted)',
             border: '1px solid var(--border)',
-            borderRadius: '0 8px 8px 0',
+            borderRight: 'none',
             cursor: 'pointer',
             fontWeight: 600,
             transition: 'all 0.2s ease'
@@ -262,10 +294,25 @@ const AdminPage = ({ isAdminAuthenticated, setIsAdminAuthenticated }) => {
         >
           SEMP Picklists
         </button>
+        <button
+          onClick={() => setActiveTab('dashboard')}
+          style={{
+            padding: '0.75rem 1.5rem',
+            background: activeTab === 'dashboard' ? 'var(--primary)' : 'transparent',
+            color: activeTab === 'dashboard' ? '#fff' : 'var(--text-muted)',
+            border: '1px solid var(--border)',
+            borderRadius: '0 8px 8px 0',
+            cursor: 'pointer',
+            fontWeight: 600,
+            transition: 'all 0.2s ease'
+          }}
+        >
+          Dashboard View
+        </button>
       </div>
 
       {/* CUSTOM FIELDS CONTENT */}
-      {activeTab !== 'semp' && (
+      {(activeTab === 'risk' || activeTab === 'burndown') && (
         <>
           <div className="card" style={{ marginBottom: '2rem' }}>
             <h3 style={{ marginTop: 0 }}>
@@ -394,6 +441,60 @@ const AdminPage = ({ isAdminAuthenticated, setIsAdminAuthenticated }) => {
             </form>
           </div>
         </>
+      )}
+
+      {/* DASHBOARD SETTINGS CONTENT */}
+      {activeTab === 'dashboard' && (
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>Configure Dashboard Modal Fields</h3>
+          <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '0.95rem' }}>
+            Select which fields should be visible in the Risk Details Modal on the dashboard. (Category, Strategy, and Description are always visible).
+          </p>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {[
+              { id: 'level', label: 'Level' },
+              { id: 'gpocs', label: 'GPOCs' },
+              { id: 'cpocs', label: 'CPOCs' },
+              { id: 'discoveredDate', label: 'Discovered Date' },
+              { id: 'approvedDate', label: 'Approved Date' },
+              { id: 'closedDate', label: 'Closed Date' },
+              { id: 'impactStatement', label: 'General Impact Statement' },
+              { id: 'impactCost', label: 'Impact on Cost' },
+              { id: 'impactSchedule', label: 'Impact on Schedule' },
+              { id: 'impactPerformance', label: 'Impact on Performance' },
+              { id: 'isSpof', label: 'Single Point of Failure (SPoF)' },
+              { id: 'resourceCostNeeded', label: 'Resource Cost Needed' },
+              { id: 'resourceScheduleNeeded', label: 'Resource Schedule Needed' },
+              { id: 'planRealism', label: 'Plan Realism' },
+              { id: 'sempTable7', label: 'SEMP Table 7' },
+              { id: 'sempTable8', label: 'SEMP Table 8' },
+              ...riskFields.map(f => ({ id: `custom_${f.name}`, label: f.name }))
+            ].map(field => {
+              const isVisible = !dashboardSettings.hiddenFields.includes(field.id);
+              return (
+                <label 
+                  key={field.id} 
+                  style={{ 
+                    display: 'flex', alignItems: 'center', gap: '0.75rem', 
+                    padding: '1rem', background: 'rgba(15, 23, 42, 0.5)', 
+                    borderRadius: '8px', border: '1px solid var(--border)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <input 
+                    type="checkbox" 
+                    checked={isVisible} 
+                    onChange={() => handleToggleDashboardField(field.id)}
+                    disabled={savingSettings}
+                    style={{ accentColor: 'var(--primary)', width: '18px', height: '18px' }}
+                  />
+                  <span style={{ fontWeight: 600 }}>{field.label}</span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
       )}
     </div>
   );

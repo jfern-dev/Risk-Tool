@@ -8,6 +8,7 @@ import AttachmentsModal from '../components/AttachmentsModal';
 import StatusLogModal from '../components/StatusLogModal';
 import SnapshotModal from '../components/SnapshotModal';
 import ItemHistoryModal from '../components/ItemHistoryModal';
+import RiskDetailsModal from '../components/RiskDetailsModal';
 import { apiFetch } from '../utils/api';
 
 const Dashboard = () => {
@@ -25,17 +26,9 @@ const Dashboard = () => {
   const [itemToSnapshot, setItemToSnapshot] = useState(null);
   const [activeHistoryRisk, setActiveHistoryRisk] = useState(null);
   const [isGlobalSnapshotModalOpen, setIsGlobalSnapshotModalOpen] = useState(false);
-  const [expandedIds, setExpandedIds] = useState(new Set());
+  const [activeRiskDetails, setActiveRiskDetails] = useState(null);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [newPassword, setNewPassword] = useState('');
-
-  const toggleExpand = (id) => {
-    setExpandedIds(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  };
 
   const loadData = async () => {
     try {
@@ -231,9 +224,7 @@ const Dashboard = () => {
             <div className="card" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
               No items identified yet.
             </div>
-          ) : (
-            displayRisks.map(risk => {
-              const isExpanded = expandedIds.has(risk.id);
+          ) : displayRisks.map(risk => {
               const score = (risk.likelihood || 0) * (risk.impact || 0);
               
               // Calculate Delta
@@ -261,7 +252,7 @@ const Dashboard = () => {
               return (
                 <div key={risk.id} className="card" style={{ padding: 0, overflow: 'hidden' }}>
                   <div
-                    onClick={() => toggleExpand(risk.id)}
+                    onClick={() => setActiveRiskDetails(risk)}
                     style={{
                       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                       padding: '0.875rem 1.25rem', cursor: 'pointer', userSelect: 'none',
@@ -288,68 +279,32 @@ const Dashboard = () => {
                       <span className={badgeClass} style={{ padding: '2px 10px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 700, whiteSpace: 'nowrap', border: 'none' }}>
                         Score: {currentItemType === 'Issue' ? risk.impact : score}
                       </span>
-                      <ChevronDown size={18} color="var(--text-muted)" style={{ transition: 'transform 0.25s ease', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', flexShrink: 0 }} />
                     </div>
                   </div>
-
-                  {isExpanded && (
-                    <div style={{ borderTop: '1px solid var(--border)', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', fontSize: '0.85rem' }}>
-                        <div><strong>Category:</strong> {risk.riskCategory || 'N/A'}</div>
-                        <div><strong>Strategy:</strong> {risk.handlingStrategy || 'N/A'}</div>
-                        <div><strong>GPOCs:</strong> {risk.gpocs || 'None'}</div>
-                      </div>
-                      
-                      {risk.description && (
-                        <div>
-                          <strong style={{ fontSize: '0.85rem' }}>Description:</strong>
-                          <p style={{ margin: '0.25rem 0 0 0', color: 'var(--text-muted)', fontSize: '0.9rem' }}>{risk.description}</p>
-                        </div>
-                      )}
-                      
-                      {risk.isSpof && (
-                        <div style={{ background: 'rgba(239, 68, 68, 0.1)', borderLeft: '4px solid var(--danger)', padding: '0.5rem 1rem', borderRadius: '4px' }}>
-                          <strong style={{ color: 'var(--danger)', fontSize: '0.85rem' }}>Single Point of Failure (SPoF)</strong>
-                          <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.9rem' }}>{risk.spofDescription}</p>
-                        </div>
-                      )}
-
-                      <RiskTimeline risk={risk} />
-                      
-                      <div style={{ display: 'flex', gap: '1rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
-                        <button className="btn" style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)' }} onClick={(e) => { e.stopPropagation(); setEditingRisk(risk); }}>
-                          <Pencil size={16} style={{ marginRight: '6px' }} />
-                          Edit
-                        </button>
-                        <button className="btn" style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)' }} onClick={(e) => { e.stopPropagation(); setActiveBurndownRisk(risk); }}>
-                          <TrendingDown size={16} style={{ marginRight: '6px' }} />
-                          Action Plan ({risk.burndownSteps?.length || 0})
-                        </button>
-                        <button className="btn" style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)' }} onClick={(e) => { e.stopPropagation(); setItemToSnapshot(risk); }}>
-                          <Camera size={16} style={{ marginRight: '6px' }} />
-                          Snapshot
-                        </button>
-                        <button className="btn" style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)' }} onClick={(e) => { e.stopPropagation(); setActiveStatusLogRisk(risk); }}>
-                          <Clock size={16} style={{ marginRight: '6px' }} />
-                          Status Logs ({risk.statusLogs?.length || 0})
-                        </button>
-                        <button className="btn" style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)' }} onClick={(e) => { e.stopPropagation(); setActiveAttachmentsRisk(risk); }}>
-                          <FileText size={16} style={{ marginRight: '6px' }} />
-                          Attachments ({risk.attachments?.length || 0})
-                        </button>
-                        <button className="btn" style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)' }} onClick={(e) => { e.stopPropagation(); setActiveHistoryRisk(risk); }}>
-                          <Clock size={16} style={{ marginRight: '6px' }} />
-                          History ({risk.snapshots?.length || 0})
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </div>
               );
             })
-          )}
+          }
         </div>
       </div>
+
+      {activeRiskDetails && (
+        <RiskDetailsModal 
+          risk={activeRiskDetails} 
+          onClose={() => setActiveRiskDetails(null)} 
+          onActionClick={(action, targetRisk) => {
+            if (action === 'edit') setEditingRisk(targetRisk);
+            if (action === 'burndown') setActiveBurndownRisk(targetRisk);
+            if (action === 'snapshot') setItemToSnapshot(targetRisk);
+            if (action === 'statusLog') setActiveStatusLogRisk(targetRisk);
+            if (action === 'attachments') setActiveAttachmentsRisk(targetRisk);
+            if (action === 'history') setActiveHistoryRisk(targetRisk);
+            
+            // Note: We deliberately don't close activeRiskDetails here so it stays open
+            // in the background while the sub-modal is open, providing a nice layered feel.
+          }}
+        />
+      )}
 
       {isModalOpen && (
         <RiskFormModal
@@ -387,6 +342,7 @@ const Dashboard = () => {
           onClose={() => setEditingRisk(null)}
           onRiskUpdated={(updatedRisk) => {
             setRisks(risks.map(r => r.id === updatedRisk.id ? updatedRisk : r));
+            if (activeRiskDetails?.id === updatedRisk.id) setActiveRiskDetails(updatedRisk);
             setEditingRisk(null);
           }}
         />
@@ -398,6 +354,7 @@ const Dashboard = () => {
           onClose={() => setActiveBurndownRisk(null)}
           onRiskUpdated={(updatedRisk) => {
             setRisks(risks.map(r => r.id === updatedRisk.id ? updatedRisk : r));
+            if (activeRiskDetails?.id === updatedRisk.id) setActiveRiskDetails(updatedRisk);
             setActiveBurndownRisk(updatedRisk);
           }}
         />
@@ -409,6 +366,7 @@ const Dashboard = () => {
           onClose={() => setActiveStatusLogRisk(null)}
           onRiskUpdated={(updatedRisk) => {
             setRisks(risks.map(r => r.id === updatedRisk.id ? updatedRisk : r));
+            if (activeRiskDetails?.id === updatedRisk.id) setActiveRiskDetails(updatedRisk);
             setActiveStatusLogRisk(updatedRisk);
           }}
         />
@@ -421,11 +379,13 @@ const Dashboard = () => {
           onAttachmentAdded={(newAttachment) => {
             const updatedRisk = { ...activeAttachmentsRisk, attachments: [...(activeAttachmentsRisk.attachments || []), newAttachment] };
             setRisks(risks.map(r => r.id === updatedRisk.id ? updatedRisk : r));
+            if (activeRiskDetails?.id === updatedRisk.id) setActiveRiskDetails(updatedRisk);
             setActiveAttachmentsRisk(updatedRisk);
           }}
           onAttachmentRemoved={(attachmentId) => {
             const updatedRisk = { ...activeAttachmentsRisk, attachments: activeAttachmentsRisk.attachments.filter(a => a.id !== attachmentId) };
             setRisks(risks.map(r => r.id === updatedRisk.id ? updatedRisk : r));
+            if (activeRiskDetails?.id === updatedRisk.id) setActiveRiskDetails(updatedRisk);
             setActiveAttachmentsRisk(updatedRisk);
           }}
         />

@@ -1,11 +1,16 @@
 import React from 'react';
 
+const riskMatrixColors = {
+  5: ['score-low', 'score-med', 'score-high', 'score-high', 'score-high'],
+  4: ['score-low', 'score-med', 'score-med', 'score-high', 'score-high'],
+  3: ['score-low', 'score-low', 'score-med', 'score-med', 'score-high'],
+  2: ['score-low', 'score-low', 'score-low', 'score-med', 'score-med'],
+  1: ['score-low', 'score-low', 'score-low', 'score-low', 'score-med']
+};
+
 export const getScoreClass = (likelihood, impact) => {
-  const score = likelihood * impact;
-  if (score <= 4) return 'score-low';
-  if (score <= 9) return 'score-med';
-  if (score <= 16) return 'score-high';
-  return 'score-extreme';
+  if (!likelihood || !impact) return 'score-low';
+  return riskMatrixColors[likelihood][impact - 1];
 };
 
 export const getOppScoreClass = (likelihood, impact) => {

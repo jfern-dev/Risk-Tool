@@ -55,6 +55,9 @@ let appData = {
   sempTables: {
     table7: [],
     table8: []
+  },
+  dashboardSettings: {
+    hiddenFields: []
   }
 };
 
@@ -386,6 +389,21 @@ ipcMain.handle('api-delete-attachment', async (event, riskId, attachmentId) => {
 
 ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => {
   try {
+
+    // GET /api/dashboardSettings
+    if (reqPath === '/api/dashboardSettings' && method === 'GET') {
+      if (!appData.dashboardSettings) {
+        appData.dashboardSettings = { hiddenFields: [] };
+      }
+      return appData.dashboardSettings;
+    }
+    
+    // PUT /api/dashboardSettings
+    if (reqPath === '/api/dashboardSettings' && method === 'PUT') {
+      appData.dashboardSettings = body;
+      autoSaveToTemp();
+      return appData.dashboardSettings;
+    }
 
     // GET /api/sempTables
     if (reqPath === '/api/sempTables' && method === 'GET') {
