@@ -1,5 +1,5 @@
 {
-  "name": "erm-tool-electron",
+  "name": "risk-tool",
   "private": true,
   "version": "4.0.0",
   "repository": "https://github.com/jfern-dev/ERM-Tool",
@@ -14,8 +14,8 @@
     "electron:build": "vite build && electron-builder --mac --win"
   },
   "build": {
-    "appId": "com.ermtool.app",
-    "productName": "ERM Tool",
+    "appId": "com.risktool.app",
+    "productName": "Risk Tool",
     "directories": {
       "output": "release"
     },

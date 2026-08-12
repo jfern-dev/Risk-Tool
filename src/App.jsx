@@ -22,7 +22,7 @@ function AppContent({ fileKey, isAdminAuthenticated, setIsAdminAuthenticated }) 
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <header style={{ background: 'var(--surface)', padding: '1rem 2rem', borderBottom: '1px solid var(--border)' }}>
         <div className="container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0' }}>
-          <h1 style={{ margin: 0, fontSize: '1.5rem', color: 'var(--primary)' }}>ERM Tool</h1>
+          <h1 style={{ margin: 0, fontSize: '1.5rem', color: 'var(--primary)' }}>Risk Tool</h1>
           <nav style={{ display: 'flex', gap: '1.5rem' }}>
             <Link to="/" style={{ color: 'var(--text)', textDecoration: 'none', fontWeight: 500 }}>Dashboard</Link>
             <Link to="/table" style={{ color: 'var(--text)', textDecoration: 'none', fontWeight: 500 }}>Data Table</Link>

@@ -111,7 +111,7 @@ const handleSave = async (isSaveAs = false) => {
     zip.addLocalFolder(workDir);
     zip.writeZip(currentFilePath);
     
-    mainWindow.setTitle(`ERM Tool - ${path.basename(currentFilePath)}`);
+    mainWindow.setTitle(`Risk Tool - ${path.basename(currentFilePath)}`);
     return true;
   } catch (error) {
     dialog.showErrorBox('Save Error', `Could not save file: ${error.message}`);
@@ -161,7 +161,7 @@ const handleOpenFile = async () => {
       };
       
       currentFilePath = filePath;
-      mainWindow.setTitle(`ERM Tool - ${currentFilePath}`);
+      mainWindow.setTitle(`Risk Tool - ${currentFilePath}`);
       mainWindow.webContents.send('file-changed', appData);
       return true;
     } catch (error) {
@@ -184,7 +184,7 @@ const handleNewFile = async (password = null) => {
   }
   currentFilePath = null;
   await initWorkDir();
-  mainWindow.setTitle('ERM Tool - Untitled');
+  mainWindow.setTitle('Risk Tool - Untitled');
   mainWindow.webContents.send('file-changed', appData);
 };
 
@@ -246,7 +246,7 @@ const createWindow = () => {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
-    title: 'ERM Tool - Untitled',
+    title: 'Risk Tool - Untitled',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
