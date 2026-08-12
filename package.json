@@ -2,7 +2,7 @@
   "name": "risk-tool",
   "private": true,
   "version": "5.0.0",
-  "repository": "https://github.com/jfern-dev/ERM-Tool",
+  "repository": "https://github.com/jfern-dev/Risk-Tool",
   "main": "electron/main.js",
   "type": "module",
   "scripts": {
@@ -45,7 +45,7 @@
       {
         "provider": "github",
         "owner": "jfern-dev",
-        "repo": "ERM-Tool"
+        "repo": "Risk-Tool"
       }
     ]
   },
