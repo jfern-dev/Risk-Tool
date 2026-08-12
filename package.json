@@ -2,6 +2,7 @@
   "name": "erm-tool-electron",
   "private": true,
   "version": "3.0.0",
+  "repository": "https://github.com/jfern-dev/ERM-Tool",
   "main": "electron/main.js",
   "type": "module",
   "scripts": {
@@ -20,7 +21,8 @@
     },
     "mac": {
       "target": [
-        "dmg"
+        "dmg",
+        "zip"
       ]
     },
     "win": {
@@ -38,11 +40,19 @@
       "dist/**/*",
       "electron/**/*",
       "package.json"
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "jfern-dev",
+        "repo": "ERM-Tool"
+      }
     ]
   },
   "dependencies": {
     "adm-zip": "^0.6.0",
     "date-fns": "^4.4.0",
+    "electron-updater": "^6.8.9",
     "lucide-react": "^1.30.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
