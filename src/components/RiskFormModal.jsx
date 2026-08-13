@@ -6,7 +6,6 @@ const RiskFormModal = ({ onClose, onRiskAdded, initialRisk, onRiskUpdated, readO
   const [activeTab, setActiveTab] = useState('general');
   const [loading, setLoading] = useState(false);
   const [fieldDefs, setFieldDefs] = useState([]);
-  const [sempTables, setSempTables] = useState({ table7: [], table8: [] });
   const [customValues, setCustomValues] = useState({});
 
   // Tab 1: General
@@ -34,12 +33,10 @@ const RiskFormModal = ({ onClose, onRiskAdded, initialRisk, onRiskUpdated, readO
   const [likelihood, setLikelihood] = useState(initialRisk?.likelihood || 3);
   const [impact, setImpact] = useState(initialRisk?.impact || 3);
 
-  // Tab 3: Resources & SEMP
+  // Tab 3: Resources
   const [resourceCostNeeded, setResourceCostNeeded] = useState(initialRisk?.resourceCostNeeded || '');
   const [resourceScheduleNeeded, setResourceScheduleNeeded] = useState(initialRisk?.resourceScheduleNeeded || '');
   const [planRealism, setPlanRealism] = useState(initialRisk?.planRealism || '');
-  const [sempTable7, setSempTable7] = useState(initialRisk?.sempTable7 || '');
-  const [sempTable8, setSempTable8] = useState(initialRisk?.sempTable8 || '');
 
   useEffect(() => {
     apiFetch('http://localhost:3000/api/fields/risk')
@@ -56,11 +53,6 @@ const RiskFormModal = ({ onClose, onRiskAdded, initialRisk, onRiskUpdated, readO
           }
         } 
       })
-      .catch(console.error);
-
-    apiFetch('http://localhost:3000/api/sempTables')
-      .then(res => res.json())
-      .then(data => { if (!data.error) setSempTables(data); })
       .catch(console.error);
   }, [initialRisk]);
 
@@ -79,7 +71,7 @@ const RiskFormModal = ({ onClose, onRiskAdded, initialRisk, onRiskUpdated, readO
       gpocs, cpocs, description, impactStatement, impactCost,
       impactSchedule, impactPerformance, isSpof, spofDescription,
       likelihood: finalLikelihood, impact, resourceCostNeeded, resourceScheduleNeeded,
-      planRealism, sempTable7, sempTable8,
+      planRealism,
       discoveredDate, approvedDate, closedDate
     };
 
@@ -152,7 +144,7 @@ const RiskFormModal = ({ onClose, onRiskAdded, initialRisk, onRiskUpdated, readO
         <div style={{ display: 'flex', marginBottom: '1.5rem', borderRadius: '8px', overflow: 'hidden' }}>
           <button type="button" onClick={() => setActiveTab('general')} style={{ ...tabStyle('general'), borderRight: 'none' }}>1. General</button>
           <button type="button" onClick={() => setActiveTab('details')} style={{ ...tabStyle('details'), borderRight: 'none' }}>2. Details & Impact</button>
-          <button type="button" onClick={() => setActiveTab('resources')} style={tabStyle('resources')}>3. Resources & SEMP</button>
+          <button type="button" onClick={() => setActiveTab('resources')} style={tabStyle('resources')}>3. Resources</button>
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, overflowY: 'auto', paddingRight: '10px' }}>
@@ -281,7 +273,7 @@ const RiskFormModal = ({ onClose, onRiskAdded, initialRisk, onRiskUpdated, readO
             </div>
           </div>
 
-          {/* TAB 3: RESOURCES & SEMP */}
+          {/* TAB 3: RESOURCES */}
           <div style={{ display: activeTab === 'resources' ? 'flex' : 'none', flexDirection: 'column', gap: '1rem' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
               <div>
@@ -296,27 +288,6 @@ const RiskFormModal = ({ onClose, onRiskAdded, initialRisk, onRiskUpdated, readO
             <div>
               <label className="form-label">Plan Realism</label>
               <textarea className="form-input" rows="2" value={planRealism} onChange={e => setPlanRealism(e.target.value)} placeholder="How realistic is the plan?" />
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-              <div>
-                <label className="form-label">SEMP Table 7</label>
-                <select className="form-input" value={sempTable7} onChange={e => setSempTable7(e.target.value)}>
-                  <option value="">-- Select Option --</option>
-                  {sempTables.table7?.map(opt => (
-                    <option key={opt.id} value={opt.name}>{opt.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="form-label">SEMP Table 8</label>
-                <select className="form-input" value={sempTable8} onChange={e => setSempTable8(e.target.value)}>
-                  <option value="">-- Select Option --</option>
-                  {sempTables.table8?.map(opt => (
-                    <option key={opt.id} value={opt.name}>{opt.name}</option>
-                  ))}
-                </select>
-              </div>
             </div>
 
             {/* Admin-defined custom fields */}

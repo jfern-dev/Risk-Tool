@@ -16,6 +16,7 @@ const Dashboard = () => {
   const [snapshots, setSnapshots] = useState([]);
   const [selectedSnapshotId, setSelectedSnapshotId] = useState('current');
   const [activeItemType, setActiveItemType] = useState('Risk');
+  const [activeLevelFilter, setActiveLevelFilter] = useState('All');
   const [loading, setLoading] = useState(true);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -90,6 +91,26 @@ const Dashboard = () => {
     }
   };
 
+  const handleRestoreItem = async (snapshotData) => {
+    try {
+      const res = await apiFetch(`http://localhost:3000/api/risks/${activeHistoryRisk.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...snapshotData.data, _isRestore: true, restoredDate: snapshotData.date })
+      });
+      if (res.ok) {
+        const updatedRisk = await res.json();
+        setRisks(risks.map(r => r.id === updatedRisk.id ? updatedRisk : r));
+        setActiveHistoryRisk(null);
+        if (activeRiskDetails && activeRiskDetails.id === updatedRisk.id) {
+          setActiveRiskDetails(updatedRisk);
+        }
+      }
+    } catch (err) {
+      alert('Failed to restore item');
+    }
+  };
+
   const handleExportCSV = () => {
     const displayRisks = selectedSnapshotId === 'current' ? risks : snapshots.find(s => s.id === parseInt(selectedSnapshotId))?.risks || [];
     
@@ -103,7 +124,7 @@ const Dashboard = () => {
       "Likelihood", "Impact", "Score", "Description", "Impact Statement",
       "Cost Impact", "Schedule Impact", "Performance Impact",
       "Is SPoF", "SPoF Description", "Resource Cost", "Resource Schedule",
-      "Plan Realism", "SEMP 7", "SEMP 8", "GPOCs", "CPOCs"
+      "Plan Realism", "GPOCs", "CPOCs"
     ];
 
     const rows = displayRisks.map(r => [
@@ -114,8 +135,7 @@ const Dashboard = () => {
       r.impactCost, r.impactSchedule, r.impactPerformance,
       r.isSpof ? 'Yes' : 'No', `"${(r.spofDescription || '').replace(/"/g, '""')}"`,
       r.resourceCostNeeded, r.resourceScheduleNeeded,
-      `"${(r.planRealism || '').replace(/"/g, '""')}"`,
-      r.sempTable7, r.sempTable8, r.gpocs, r.cpocs
+      `"${(r.planRealism || '').replace(/"/g, '""')}"`, r.gpocs, r.cpocs
     ]);
 
     const csvContent = "data:text/csv;charset=utf-8," 
@@ -136,9 +156,11 @@ const Dashboard = () => {
     ? risks 
     : snapshots.find(s => s.id === parseInt(selectedSnapshotId))?.risks || [];
 
-  const displayRisks = currentSnapshotRisks.filter(r => 
-    activeItemType === 'All' ? true : (r.itemType || 'Risk') === activeItemType
-  );
+  const displayRisks = currentSnapshotRisks.filter(r => {
+    const typeMatch = activeItemType === 'All' ? true : (r.itemType || 'Risk') === activeItemType;
+    const levelMatch = activeLevelFilter === 'All' ? true : r.level === activeLevelFilter;
+    return typeMatch && levelMatch;
+  });
 
   const comparisonSnapshot = snapshots.length > 0 ? snapshots[snapshots.length - 1] : null;
 
@@ -147,6 +169,16 @@ const Dashboard = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <h2 style={{ margin: 0 }}>Dashboard</h2>
+          <select 
+            className="form-input" 
+            style={{ padding: '0.25rem 0.5rem', width: 'auto' }}
+            value={activeLevelFilter}
+            onChange={(e) => setActiveLevelFilter(e.target.value)}
+          >
+            <option value="All">All Levels</option>
+            <option value="Program">Program</option>
+            <option value="Internal">Internal</option>
+          </select>
           <select 
             className="form-input" 
             style={{ padding: '0.25rem 0.5rem', width: 'auto' }}
@@ -198,7 +230,7 @@ const Dashboard = () => {
           </select>
           <button className="btn" onClick={() => setIsModalOpen(true)}>
             <PlusCircle size={18} style={{ marginRight: '8px' }} />
-            New Risk
+            New RIO
           </button>
         </div>
       </div>
@@ -210,7 +242,7 @@ const Dashboard = () => {
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '3rem' }}>
-        <div style={{ width: '100%', maxWidth: '800px', margin: '0 auto' }}>
+        <div style={{ width: '100%', maxWidth: '480px', margin: '0 auto' }}>
           <RiskMatrix risks={displayRisks} activeType={activeItemType} />
         </div>
 
@@ -333,6 +365,7 @@ const Dashboard = () => {
         <ItemHistoryModal
           risk={activeHistoryRisk}
           onClose={() => setActiveHistoryRisk(null)}
+          onRestore={handleRestoreItem}
         />
       )}
 

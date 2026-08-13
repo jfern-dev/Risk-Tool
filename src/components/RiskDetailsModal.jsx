@@ -79,9 +79,7 @@ const RiskDetailsModal = ({ risk, onClose, onActionClick }) => {
                 { id: 'impactPerformance', label: 'Impact on Performance', value: risk.impactPerformance },
                 { id: 'resourceCostNeeded', label: 'Resource Cost Needed', value: risk.resourceCostNeeded },
                 { id: 'resourceScheduleNeeded', label: 'Resource Schedule Needed', value: risk.resourceScheduleNeeded },
-                { id: 'planRealism', label: 'Plan Realism', value: risk.planRealism },
-                { id: 'sempTable7', label: 'SEMP Table 7', value: risk.sempTable7 },
-                { id: 'sempTable8', label: 'SEMP Table 8', value: risk.sempTable8 }
+                { id: 'planRealism', label: 'Plan Realism', value: risk.planRealism }
               ].map(field => {
                 if (hiddenFields.includes(field.id) || !field.value) return null;
                 return (
@@ -120,14 +118,26 @@ const RiskDetailsModal = ({ risk, onClose, onActionClick }) => {
             <strong style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.75rem', textAlign: 'center' }}>
               Current Rating
             </strong>
-            <div style={{ transform: 'scale(0.8)', transformOrigin: 'top center', width: '100%' }}>
-              <RiskMatrix risks={[risk]} activeType={currentItemType} />
+            <div style={{ transform: 'scale(0.8)', transformOrigin: 'top center', width: '100%', marginBottom: '-55px' }}>
+              <RiskMatrix risks={[risk]} activeType={currentItemType} hideIds={true} />
             </div>
             
-            <div style={{ marginTop: '-1rem', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <span style={{ fontSize: '0.9rem', padding: '4px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '16px' }}>
-                {currentItemType !== 'Issue' && `L: ${risk.likelihood || 1} | `} I: {risk.impact || 1}
-              </span>
+            <div style={{ marginTop: '0.5rem', width: '100%', display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '280px', overflowY: 'auto', paddingRight: '4px' }}>
+              <strong style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Status Logs</strong>
+              {(risk.statusLogs && risk.statusLogs.length > 0) ? (
+                [...risk.statusLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(log => (
+                  <div key={log.id} style={{ background: 'var(--surface)', padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--border)', fontSize: '0.8rem', textAlign: 'left' }}>
+                    <div style={{ fontWeight: 'bold', color: 'var(--primary)', marginBottom: '0.25rem' }}>
+                      {new Date(log.date).toLocaleDateString()} {new Date(log.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                    {log.status && <div style={{ marginBottom: '0.25rem' }}><strong>Status:</strong> {log.status}</div>}
+                    {log.takeaways && <div style={{ marginBottom: '0.25rem' }}><strong>Takeaways:</strong> {log.takeaways}</div>}
+                    {log.challenges && <div><strong>Challenges:</strong> {log.challenges}</div>}
+                  </div>
+                ))
+              ) : (
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontStyle: 'italic', textAlign: 'center' }}>No logs yet</div>
+              )}
             </div>
           </div>
 

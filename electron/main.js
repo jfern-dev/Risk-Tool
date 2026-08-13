@@ -52,10 +52,6 @@ let appData = {
   risks: [],
   fields: [],
   snapshots: [],
-  sempTables: {
-    table7: [],
-    table8: []
-  },
   dashboardSettings: {
     hiddenFields: []
   }
@@ -161,7 +157,7 @@ const handleOpenFile = async () => {
         risks: parsed.risks || [],
         fields: parsed.fields || [],
         snapshots: parsed.snapshots || [],
-        sempTables: parsed.sempTables || { table7: [], table8: [] }
+        dashboardSettings: parsed.dashboardSettings || { hiddenFields: [] }
       };
       
       currentFilePath = filePath;
@@ -181,7 +177,7 @@ const handleNewFile = async (password = null) => {
     risks: [], 
     fields: [], 
     snapshots: [],
-    sempTables: { table7: [], table8: [] }
+    dashboardSettings: { hiddenFields: [] }
   };
   if (password) {
     appData.adminPassword = password;
@@ -405,17 +401,6 @@ ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => 
       return appData.dashboardSettings;
     }
 
-    // GET /api/sempTables
-    if (reqPath === '/api/sempTables' && method === 'GET') {
-      return appData.sempTables;
-    }
-    // PUT /api/sempTables
-    if (reqPath === '/api/sempTables' && method === 'PUT') {
-      appData.sempTables = body;
-      await autoSaveToTemp();
-      return appData.sempTables;
-    }
-
     // GET /api/snapshots
     if (reqPath === '/api/snapshots' && method === 'GET') {
       return appData.snapshots;
@@ -478,7 +463,24 @@ ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => 
       const id = parseInt(match[1]);
       const idx = appData.risks.findIndex(r => r.id === id);
       if (idx === -1) throw new Error('Risk not found');
-      appData.risks[idx] = { ...appData.risks[idx], ...body, updatedAt: new Date().toISOString() };
+      
+      // Auto-save snapshot before update
+      const oldRisk = appData.risks[idx];
+      if (!oldRisk.snapshots) oldRisk.snapshots = [];
+      const riskCopy = JSON.parse(JSON.stringify(oldRisk));
+      delete riskCopy.snapshots;
+      oldRisk.snapshots.push({
+        id: generateId(oldRisk.snapshots),
+        note: body._isRestore ? `Restored version from ${new Date(body.restoredDate).toLocaleString()}` : 'Auto-saved before update',
+        date: new Date().toISOString(),
+        data: riskCopy
+      });
+      // Remove internal _isRestore flag if present
+      const cleanBody = { ...body };
+      delete cleanBody._isRestore;
+      delete cleanBody.restoredDate;
+
+      appData.risks[idx] = { ...appData.risks[idx], ...cleanBody, updatedAt: new Date().toISOString() };
       await autoSaveToTemp();
       return appData.risks[idx];
     }
@@ -490,6 +492,18 @@ ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => 
       const risk = appData.risks.find(r => r.id === riskId);
       if (!risk) throw new Error('Risk not found');
       if (!risk.customFields) risk.customFields = [];
+
+      // Auto-save snapshot before update
+      if (!risk.snapshots) risk.snapshots = [];
+      const riskCopy = JSON.parse(JSON.stringify(risk));
+      delete riskCopy.snapshots;
+      risk.snapshots.push({
+        id: generateId(risk.snapshots),
+        note: 'Auto-saved before custom field addition',
+        date: new Date().toISOString(),
+        data: riskCopy
+      });
+
       const newCf = { id: generateId(risk.customFields), riskId, ...body };
       risk.customFields.push(newCf);
       await autoSaveToTemp();

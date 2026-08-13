@@ -112,22 +112,15 @@ const RiskTable = () => {
   const [riskFields, setRiskFields] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState('All');
-  const [semp7Options, setSemp7Options] = useState([]);
-  const [semp8Options, setSemp8Options] = useState([]);
 
   useEffect(() => {
     Promise.all([
       apiFetch('http://localhost:3000/api/risks').then(r => r.json()),
-      apiFetch('http://localhost:3000/api/fields/risk').then(r => r.json()),
-      apiFetch('http://localhost:3000/api/sempTables').then(r => r.json())
+      apiFetch('http://localhost:3000/api/fields/risk').then(r => r.json())
     ])
-      .then(([risksData, fieldsData, sempData]) => {
+      .then(([risksData, fieldsData]) => {
         if (!risksData.error && Array.isArray(risksData)) setRisks(risksData);
         if (!fieldsData.error && Array.isArray(fieldsData)) setRiskFields(fieldsData);
-        if (!sempData.error) {
-          setSemp7Options((sempData.table7 || []).map(o => o.name));
-          setSemp8Options((sempData.table8 || []).map(o => o.name));
-        }
         setLoading(false);
       })
       .catch(err => {
@@ -242,8 +235,6 @@ const RiskTable = () => {
               <th style={{ padding: '0.75rem', fontWeight: 600 }}>Res. Cost</th>
               <th style={{ padding: '0.75rem', fontWeight: 600 }}>Res. Sched</th>
               <th style={{ padding: '0.75rem', fontWeight: 600 }}>Plan Realism</th>
-              <th style={{ padding: '0.75rem', fontWeight: 600 }}>SEMP 7</th>
-              <th style={{ padding: '0.75rem', fontWeight: 600 }}>SEMP 8</th>
               {riskFields.map(f => (
                 <th key={f.id} style={{ padding: '0.75rem', fontWeight: 600 }}>{f.name}</th>
               ))}
@@ -336,12 +327,6 @@ const RiskTable = () => {
                     </td>
                     <td style={{ padding: '0.5rem', verticalAlign: 'top' }}>
                       <EditableCell value={risk.planRealism} field="planRealism" type="textarea" onSave={(field, val) => handleSave(risk.id, field, val)} />
-                    </td>
-                    <td style={{ padding: '0.5rem', verticalAlign: 'top' }}>
-                      <EditableCell value={risk.sempTable7} field="sempTable7" type="select" options={semp7Options} onSave={(field, val) => handleSave(risk.id, field, val)} />
-                    </td>
-                    <td style={{ padding: '0.5rem', verticalAlign: 'top' }}>
-                      <EditableCell value={risk.sempTable8} field="sempTable8" type="select" options={semp8Options} onSave={(field, val) => handleSave(risk.id, field, val)} />
                     </td>
                     
                     {riskFields.map(f => {
