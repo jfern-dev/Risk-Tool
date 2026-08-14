@@ -93,7 +93,7 @@ const StatusLogModal = ({ risk, onClose, onRiskUpdated }) => {
           {(!risk.statusLogs || risk.statusLogs.length === 0) ? (
             <p style={{ color: 'var(--text-muted)', textAlign: 'center', fontStyle: 'italic', marginTop: '2rem' }}>No status logs recorded yet.</p>
           ) : (
-            risk.statusLogs.map((log) => (
+            [...(risk.statusLogs || [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((log) => (
               <div key={log.id} style={{ padding: '1rem', background: 'rgba(15, 23, 42, 0.3)', borderRadius: '8px', borderLeft: '4px solid var(--primary)' }}>
                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem', fontWeight: 600 }}>
                   {new Date(log.date).toLocaleString()}

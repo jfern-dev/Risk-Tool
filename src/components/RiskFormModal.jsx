@@ -98,12 +98,19 @@ const RiskFormModal = ({ onClose, onRiskAdded, initialRisk, onRiskUpdated, readO
         .map(f => ({ name: f.name, value: customValues[f.name] }));
 
       if (customEntries.length > 0 || isEdit) {
-        await apiFetch(`http://localhost:3000/api/risks/${savedRisk.id}/custom-fields`, {
+        const cfRes = await apiFetch(`http://localhost:3000/api/risks/${savedRisk.id}/custom-fields`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ fields: customEntries })
         });
-        savedRisk.customFields = customEntries.map((f, i) => ({ id: i, ...f, riskId: savedRisk.id }));
+        if (cfRes.ok) {
+          const cfData = await cfRes.json();
+          if (cfData && cfData.customFields) {
+            savedRisk.customFields = cfData.customFields;
+          } else if (customEntries.length > 0) {
+            savedRisk.customFields = customEntries.map((f, i) => ({ id: i, ...f, riskId: savedRisk.id }));
+          }
+        }
       }
 
       if (isEdit) {

@@ -42,7 +42,7 @@ const ItemHistoryModal = ({ risk, onClose, onRestore }) => {
     if (snapsOnDate && !snapsOnDate.find(s => s.id === selectedSnapId)) {
       setSelectedSnapId(snapsOnDate[snapsOnDate.length - 1].id);
     }
-  }, [selectedDate, selectedSnapId, groupedSnapshots]);
+  }, [selectedDate, selectedSnapId]);
 
   const selectedSnapshot = snapshots.find(s => s.id === selectedSnapId) || snapshots[0];
 

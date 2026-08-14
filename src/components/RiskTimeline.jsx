@@ -25,7 +25,7 @@ const RiskTimeline = ({ risk }) => {
   let currentTargetI = initialI;
   
   // Gather all target events (projections)
-  const targetEvents = risk.burndownSteps.map(s => ({
+  const targetEvents = risk.burndownSteps.filter(s => s.targetDate).map(s => ({
     date: new Date(s.targetDate).getTime(),
     isTarget: true,
     step: s

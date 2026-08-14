@@ -241,12 +241,10 @@ const Dashboard = () => {
         </div>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '3rem' }}>
-        <div style={{ width: '100%', maxWidth: '480px', margin: '0 auto' }}>
-          <RiskMatrix risks={displayRisks} activeType={activeItemType} />
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+      <div style={{ display: 'flex', gap: '2rem', alignItems: 'flex-start' }}>
+        
+        {/* Left Column: List */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
             <h3 style={{ margin: 0 }}>{activeItemType} Register</h3>
             <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{displayRisks.length} item{displayRisks.length !== 1 ? 's' : ''}</span>
@@ -317,6 +315,11 @@ const Dashboard = () => {
               );
             })
           }
+        </div>
+
+        {/* Right Column: Matrix */}
+        <div style={{ width: '480px', flexShrink: 0, position: 'sticky', top: '2rem' }}>
+          <RiskMatrix risks={displayRisks} activeType={activeItemType} />
         </div>
       </div>
 

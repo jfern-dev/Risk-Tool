@@ -10,7 +10,9 @@ const riskMatrixColors = {
 
 export const getScoreClass = (likelihood, impact) => {
   if (!likelihood || !impact) return 'score-low';
-  return riskMatrixColors[likelihood][impact - 1];
+  const clampedL = Math.max(1, Math.min(5, likelihood));
+  const clampedI = Math.max(1, Math.min(5, impact));
+  return riskMatrixColors[clampedL][clampedI - 1];
 };
 
 export const getOppScoreClass = (likelihood, impact) => {

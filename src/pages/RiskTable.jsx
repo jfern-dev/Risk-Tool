@@ -173,7 +173,10 @@ const RiskTable = () => {
         body: JSON.stringify({
           itemType: 'Risk',
           title: 'New Item',
-          userRiskId: `R-${String(risks.length + 1).padStart(3, '0')}`,
+          userRiskId: `R-${String((risks.reduce((max, r) => {
+            const match = r.userRiskId?.match(/\d+$/);
+            return match ? Math.max(max, parseInt(match[0])) : max;
+          }, 0)) + 1).padStart(3, '0')}`,
           likelihood: 1,
           impact: 1,
         })

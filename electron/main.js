@@ -385,6 +385,21 @@ ipcMain.handle('api-delete-attachment', async (event, riskId, attachmentId) => {
 
 ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => {
   try {
+    const formatRiskId = (id, type) => {
+      if (!id) return id;
+      let formatted = id.trim();
+      if (type === 'Risk') {
+        formatted = formatted.replace(/^[IO]-/, '');
+        if (!formatted.startsWith('R-')) formatted = 'R-' + formatted;
+      } else if (type === 'Issue') {
+        formatted = formatted.replace(/^[RO]-/, '');
+        if (!formatted.startsWith('I-')) formatted = 'I-' + formatted;
+      } else if (type === 'Opportunity') {
+        formatted = formatted.replace(/^[RI]-/, '');
+        if (!formatted.startsWith('O-')) formatted = 'O-' + formatted;
+      }
+      return formatted;
+    };
 
     // GET /api/dashboardSettings
     if (reqPath === '/api/dashboardSettings' && method === 'GET') {
@@ -397,7 +412,7 @@ ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => 
     // PUT /api/dashboardSettings
     if (reqPath === '/api/dashboardSettings' && method === 'PUT') {
       appData.dashboardSettings = body;
-      autoSaveToTemp();
+      await autoSaveToTemp();
       return appData.dashboardSettings;
     }
 
@@ -424,6 +439,12 @@ ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => 
     }
     // POST /api/risks
     if (reqPath === '/api/risks' && method === 'POST') {
+      if (body.userRiskId) {
+        body.userRiskId = formatRiskId(body.userRiskId, body.itemType);
+      }
+      if (body.userRiskId && appData.risks.some(r => r.userRiskId === body.userRiskId)) {
+        throw new Error('An item with this ID already exists. Please choose a unique ID.');
+      }
       const newRisk = {
         id: generateId(appData.risks),
         ...body,
@@ -463,6 +484,13 @@ ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => 
       const id = parseInt(match[1]);
       const idx = appData.risks.findIndex(r => r.id === id);
       if (idx === -1) throw new Error('Risk not found');
+      
+      if (body.userRiskId) {
+        body.userRiskId = formatRiskId(body.userRiskId, body.itemType || appData.risks[idx].itemType);
+      }
+      if (body.userRiskId && appData.risks.some(r => r.userRiskId === body.userRiskId && r.id !== id)) {
+        throw new Error('An item with this ID already exists. Please choose a unique ID.');
+      }
       
       // Auto-save snapshot before update
       const oldRisk = appData.risks[idx];
