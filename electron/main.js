@@ -53,7 +53,12 @@ let appData = {
   fields: [],
   snapshots: [],
   dashboardSettings: {
-    hiddenFields: []
+    hiddenFields: [],
+    picklists: {
+      level: { options: ['Program', 'Internal'], isMultiSelect: false },
+      riskCategory: { options: ['Schedule', 'Cost', 'Technical'], isMultiSelect: false },
+      handlingStrategy: { options: ['Accept', 'Decline', 'Transfer', 'Mitigate/Execute'], isMultiSelect: false }
+    }
   }
 };
 
@@ -83,8 +88,7 @@ app.on('will-quit', () => cleanupWorkDir());
 const autoSaveToTemp = async () => {
   try {
     const jsonStr = JSON.stringify(appData, null, 2);
-    const encryptedStr = encryptData(jsonStr);
-    await fs.writeFile(path.join(workDir, 'data.json'), encryptedStr, 'utf-8');
+    await fs.writeFile(path.join(workDir, 'data.json'), jsonStr, 'utf-8');
   } catch (error) {
     console.error('Error auto-saving to temp:', error);
   }
@@ -159,6 +163,13 @@ const handleOpenFile = async () => {
         snapshots: parsed.snapshots || [],
         dashboardSettings: parsed.dashboardSettings || { hiddenFields: [] }
       };
+      if (!appData.dashboardSettings.picklists) {
+        appData.dashboardSettings.picklists = {
+          level: { options: ['Program', 'Internal'], isMultiSelect: false },
+          riskCategory: { options: ['Schedule', 'Cost', 'Technical'], isMultiSelect: false },
+          handlingStrategy: { options: ['Accept', 'Decline', 'Transfer', 'Mitigate/Execute'], isMultiSelect: false }
+        };
+      }
       
       currentFilePath = filePath;
       mainWindow.setTitle(`Risk Tool - ${currentFilePath}`);
@@ -177,7 +188,14 @@ const handleNewFile = async (password = null) => {
     risks: [], 
     fields: [], 
     snapshots: [],
-    dashboardSettings: { hiddenFields: [] }
+    dashboardSettings: { 
+      hiddenFields: [],
+      picklists: {
+        level: { options: ['Program', 'Internal'], isMultiSelect: false },
+        riskCategory: { options: ['Schedule', 'Cost', 'Technical'], isMultiSelect: false },
+        handlingStrategy: { options: ['Accept', 'Decline', 'Transfer', 'Mitigate/Execute'], isMultiSelect: false }
+      }
+    }
   };
   if (password) {
     appData.adminPassword = password;
@@ -405,6 +423,13 @@ ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => 
     if (reqPath === '/api/dashboardSettings' && method === 'GET') {
       if (!appData.dashboardSettings) {
         appData.dashboardSettings = { hiddenFields: [] };
+      }
+      if (!appData.dashboardSettings.picklists) {
+        appData.dashboardSettings.picklists = {
+          level: { options: ['Program', 'Internal'], isMultiSelect: false },
+          riskCategory: { options: ['Schedule', 'Cost', 'Technical'], isMultiSelect: false },
+          handlingStrategy: { options: ['Accept', 'Decline', 'Transfer', 'Mitigate/Execute'], isMultiSelect: false }
+        };
       }
       return appData.dashboardSettings;
     }

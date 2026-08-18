@@ -6,6 +6,7 @@ const FIELD_TYPES = [
   { value: 'text', label: 'Text' },
   { value: 'number', label: 'Number' },
   { value: 'date', label: 'Date' },
+  { value: 'picklist', label: 'Picklist' }
 ];
 
 const AdminPage = ({ isAdminAuthenticated, setIsAdminAuthenticated }) => {
@@ -146,6 +147,38 @@ const AdminPage = ({ isAdminAuthenticated, setIsAdminAuthenticated }) => {
     }
   };
 
+  const handleSavePicklist = async (key, updatedPicklist) => {
+    setSavingSettings(true);
+    try {
+      const newSettings = {
+        ...dashboardSettings,
+        picklists: {
+          ...(dashboardSettings.picklists || {}),
+          [key]: updatedPicklist
+        }
+      };
+      const res = await apiFetch('http://localhost:3000/api/dashboardSettings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newSettings)
+      });
+      if (!res.ok) throw new Error('Failed to save picklist');
+      const savedSettings = await res.json();
+      setDashboardSettings(savedSettings);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
+  const picklistKeys = [
+    { key: 'level', label: 'Level (Standard)' },
+    { key: 'riskCategory', label: 'Category (Standard)' },
+    { key: 'handlingStrategy', label: 'Handling Strategy (Standard)' },
+    ...fields.filter(f => f.fieldType === 'picklist').map(f => ({ key: `custom_${f.name}`, label: `${f.name} (Custom)` }))
+  ];
+
 
   if (loading || checkingAuth) {
     return (
@@ -229,13 +262,29 @@ const AdminPage = ({ isAdminAuthenticated, setIsAdminAuthenticated }) => {
             background: activeTab === 'dashboard' ? 'var(--primary)' : 'transparent',
             color: activeTab === 'dashboard' ? '#fff' : 'var(--text-muted)',
             border: '1px solid var(--border)',
-            borderRadius: '0 8px 8px 0',
+            borderLeft: 'none',
+            borderRight: 'none',
             cursor: 'pointer',
             fontWeight: 600,
             transition: 'all 0.2s ease'
           }}
         >
           Dashboard View
+        </button>
+        <button
+          onClick={() => setActiveTab('picklists')}
+          style={{
+            padding: '0.75rem 1.5rem',
+            background: activeTab === 'picklists' ? 'var(--primary)' : 'transparent',
+            color: activeTab === 'picklists' ? '#fff' : 'var(--text-muted)',
+            border: '1px solid var(--border)',
+            borderRadius: '0 8px 8px 0',
+            cursor: 'pointer',
+            fontWeight: 600,
+            transition: 'all 0.2s ease'
+          }}
+        >
+          Picklists
         </button>
       </div>
 
@@ -357,6 +406,78 @@ const AdminPage = ({ isAdminAuthenticated, setIsAdminAuthenticated }) => {
                   <span style={{ fontWeight: 600 }}>{field.label}</span>
                 </label>
               );
+            })}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'picklists' && (
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>Configure Picklists</h3>
+          <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '0.95rem' }}>
+            Modify the options for standard and custom picklists, and toggle multi-select.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+            {picklistKeys.map(item => {
+               const pl = dashboardSettings.picklists?.[item.key] || { options: [], isMultiSelect: false };
+               return (
+                 <div key={item.key} style={{ padding: '1.25rem', border: '1px solid var(--border)', borderRadius: '8px', background: 'rgba(15, 23, 42, 0.3)' }}>
+                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                     <h4 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--primary)' }}>{item.label}</h4>
+                     <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                       <input 
+                         type="checkbox" 
+                         checked={pl.isMultiSelect} 
+                         onChange={(e) => handleSavePicklist(item.key, { ...pl, isMultiSelect: e.target.checked })} 
+                         style={{ accentColor: 'var(--primary)', width: '18px', height: '18px' }} 
+                       />
+                       <span style={{ fontSize: '0.95rem', fontWeight: 600 }}>Multi-select</span>
+                     </label>
+                   </div>
+                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
+                     {pl.options.map((opt, i) => (
+                       <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.35rem 0.85rem', background: 'var(--surface)', borderRadius: '16px', border: '1px solid var(--border)', fontSize: '0.9rem' }}>
+                         {opt}
+                         <button 
+                           onClick={() => {
+                             const newOpts = pl.options.filter((_, idx) => idx !== i);
+                             handleSavePicklist(item.key, { ...pl, options: newOpts });
+                           }} 
+                           style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: 0, display: 'flex' }}>
+                           <Trash2 size={16} />
+                         </button>
+                       </div>
+                     ))}
+                     {pl.options.length === 0 && <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem', fontStyle: 'italic' }}>No options defined</span>}
+                   </div>
+                   <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.5rem' }}>
+                     <input 
+                       type="text" 
+                       className="form-input" 
+                       placeholder="Add New Option" 
+                       id={`new-opt-${item.key}`} 
+                       onKeyDown={(e) => {
+                         if (e.key === 'Enter') {
+                           e.preventDefault();
+                           const val = e.target.value.trim();
+                           if (val && !pl.options.includes(val)) {
+                             handleSavePicklist(item.key, { ...pl, options: [...pl.options, val] });
+                             e.target.value = '';
+                           }
+                         }
+                       }}
+                     />
+                     <button type="button" className="btn" onClick={() => {
+                       const input = document.getElementById(`new-opt-${item.key}`);
+                       const val = input.value.trim();
+                       if (val && !pl.options.includes(val)) {
+                         handleSavePicklist(item.key, { ...pl, options: [...pl.options, val] });
+                         input.value = '';
+                       }
+                     }}>Add</button>
+                   </div>
+                 </div>
+               );
             })}
           </div>
         </div>

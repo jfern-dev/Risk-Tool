@@ -64,6 +64,22 @@ const EditableCell = ({ value, field, type = 'text', options = [], onSave }) => 
         </select>
       );
     }
+    if (type === 'multiselect') {
+      const valArray = Array.isArray(currentValue) ? currentValue : (currentValue ? (typeof currentValue === 'string' ? currentValue.split(',').map(s=>s.trim()) : [currentValue]) : []);
+      return (
+        <select
+          ref={inputRef}
+          multiple
+          value={valArray}
+          onChange={(e) => setCurrentValue(Array.from(e.target.selectedOptions, option => option.value))}
+          onBlur={handleBlur}
+          className="form-input"
+          style={{ padding: '0.25rem 0.5rem', width: '100%', minHeight: '60px' }}
+        >
+          {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+        </select>
+      );
+    }
     return (
       <input
         ref={inputRef}
@@ -91,7 +107,7 @@ const EditableCell = ({ value, field, type = 'text', options = [], onSave }) => 
       onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
       onMouseOut={e => e.currentTarget.style.background = 'transparent'}
     >
-      {value || <span style={{ color: 'var(--text-muted)' }}>Empty</span>}
+      {Array.isArray(value) ? (value.length ? value.join(', ') : <span style={{ color: 'var(--text-muted)' }}>Empty</span>) : (value || <span style={{ color: 'var(--text-muted)' }}>Empty</span>)}
     </div>
   );
 };
@@ -112,15 +128,18 @@ const RiskTable = () => {
   const [riskFields, setRiskFields] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState('All');
+  const [dashboardSettings, setDashboardSettings] = useState(null);
 
   useEffect(() => {
     Promise.all([
       apiFetch('http://localhost:3000/api/risks').then(r => r.json()),
-      apiFetch('http://localhost:3000/api/fields/risk').then(r => r.json())
+      apiFetch('http://localhost:3000/api/fields/risk').then(r => r.json()),
+      apiFetch('http://localhost:3000/api/dashboardSettings').then(r => r.json())
     ])
-      .then(([risksData, fieldsData]) => {
+      .then(([risksData, fieldsData, settingsData]) => {
         if (!risksData.error && Array.isArray(risksData)) setRisks(risksData);
         if (!fieldsData.error && Array.isArray(fieldsData)) setRiskFields(fieldsData);
+        if (!settingsData.error) setDashboardSettings(settingsData);
         setLoading(false);
       })
       .catch(err => {
@@ -272,13 +291,28 @@ const RiskTable = () => {
                       <EditableCell value={risk.title} field="title" onSave={(field, val) => handleSave(risk.id, field, val)} />
                     </td>
                     <td style={{ padding: '0.5rem', verticalAlign: 'top' }}>
-                      <EditableCell value={risk.level} field="level" type="select" options={['Program', 'Internal']} onSave={(field, val) => handleSave(risk.id, field, val)} />
+                      <EditableCell 
+                        value={risk.level} field="level" 
+                        type={dashboardSettings?.picklists?.level?.isMultiSelect ? 'multiselect' : 'select'} 
+                        options={dashboardSettings?.picklists?.level?.options || ['Program', 'Internal']} 
+                        onSave={(field, val) => handleSave(risk.id, field, val)} 
+                      />
                     </td>
                     <td style={{ padding: '0.5rem', verticalAlign: 'top' }}>
-                      <EditableCell value={risk.riskCategory} field="riskCategory" onSave={(field, val) => handleSave(risk.id, field, val)} />
+                      <EditableCell 
+                        value={risk.riskCategory} field="riskCategory" 
+                        type={dashboardSettings?.picklists?.riskCategory?.isMultiSelect ? 'multiselect' : 'select'} 
+                        options={dashboardSettings?.picklists?.riskCategory?.options || ['Schedule', 'Cost', 'Technical']} 
+                        onSave={(field, val) => handleSave(risk.id, field, val)} 
+                      />
                     </td>
                     <td style={{ padding: '0.5rem', verticalAlign: 'top' }}>
-                      <EditableCell value={risk.handlingStrategy} field="handlingStrategy" type="select" options={['Accept', 'Avoid', 'Transfer', 'Mitigate']} onSave={(field, val) => handleSave(risk.id, field, val)} />
+                      <EditableCell 
+                        value={risk.handlingStrategy} field="handlingStrategy" 
+                        type={dashboardSettings?.picklists?.handlingStrategy?.isMultiSelect ? 'multiselect' : 'select'} 
+                        options={dashboardSettings?.picklists?.handlingStrategy?.options || ['Accept', 'Decline', 'Transfer', 'Mitigate/Execute']} 
+                        onSave={(field, val) => handleSave(risk.id, field, val)} 
+                      />
                     </td>
                     <td style={{ padding: '0.5rem', verticalAlign: 'top' }}>
                       <EditableCell value={risk.gpocs} field="gpocs" onSave={(field, val) => handleSave(risk.id, field, val)} />
@@ -333,16 +367,17 @@ const RiskTable = () => {
                     </td>
                     
                     {riskFields.map(f => {
-                      const cf = (risk.customFields || []).find(c => c.name === f.name);
+                      const customVal = (risk.customFields || []).find(c => c.name === f.name);
                       return (
                         <td key={f.id} style={{ padding: '0.5rem', verticalAlign: 'top' }}>
-                          <EditableCell 
-                            value={cf ? cf.value : ''} 
-                            field={`custom:${f.name}`}
-                            type={f.fieldType === 'number' ? 'number' : f.fieldType === 'date' ? 'date' : 'text'}
-                            onSave={(field, val) => handleSave(risk.id, field, val)} 
-                          />
-                        </td>
+                        <EditableCell 
+                          value={customVal ? customVal.value : ''} 
+                          field={`custom:${f.name}`} 
+                          type={f.fieldType === 'picklist' ? (dashboardSettings?.picklists?.[`custom_${f.name}`]?.isMultiSelect ? 'multiselect' : 'select') : (f.fieldType === 'number' ? 'number' : f.fieldType === 'date' ? 'date' : 'text')} 
+                          options={f.fieldType === 'picklist' ? (dashboardSettings?.picklists?.[`custom_${f.name}`]?.options || []) : []}
+                          onSave={(field, val) => handleSave(risk.id, field, val)} 
+                        />
+                      </td>
                       );
                     })}
                   </tr>
