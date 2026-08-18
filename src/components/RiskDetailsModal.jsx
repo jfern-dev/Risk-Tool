@@ -51,11 +51,11 @@ const RiskDetailsModal = ({ risk, onClose, onActionClick }) => {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
               <div>
                 <strong style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Category</strong>
-                <div style={{ fontSize: '1rem', marginTop: '0.25rem' }}>{risk.riskCategory || 'N/A'}</div>
+                <div style={{ fontSize: '1rem', marginTop: '0.25rem' }}>{Array.isArray(risk.riskCategory) ? risk.riskCategory.join(', ') : (risk.riskCategory || 'N/A')}</div>
               </div>
               <div>
                 <strong style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Handling Strategy</strong>
-                <div style={{ fontSize: '1rem', marginTop: '0.25rem' }}>{risk.handlingStrategy || 'N/A'}</div>
+                <div style={{ fontSize: '1rem', marginTop: '0.25rem' }}>{Array.isArray(risk.handlingStrategy) ? risk.handlingStrategy.join(', ') : (risk.handlingStrategy || 'N/A')}</div>
               </div>
             </div>
 
@@ -82,10 +82,11 @@ const RiskDetailsModal = ({ risk, onClose, onActionClick }) => {
                 { id: 'planRealism', label: 'Plan Realism', value: risk.planRealism }
               ].map(field => {
                 if (hiddenFields.includes(field.id) || !field.value) return null;
+                const displayVal = Array.isArray(field.value) ? field.value.join(', ') : field.value;
                 return (
                   <div key={field.id} style={{ gridColumn: field.fullWidth ? '1 / -1' : 'auto' }}>
                     <strong style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{field.label}</strong>
-                    <div style={{ fontSize: '0.95rem', marginTop: '0.25rem', whiteSpace: field.fullWidth ? 'pre-wrap' : 'normal' }}>{field.value}</div>
+                    <div style={{ fontSize: '0.95rem', marginTop: '0.25rem', whiteSpace: field.fullWidth ? 'pre-wrap' : 'normal' }}>{displayVal}</div>
                   </div>
                 );
               })}
@@ -103,10 +104,11 @@ const RiskDetailsModal = ({ risk, onClose, onActionClick }) => {
                 
                 const customField = risk.customFields?.find(cf => cf.name === field.name);
                 const value = customField ? customField.value : 'N/A';
+                const displayVal = Array.isArray(value) ? value.join(', ') : value;
                 return (
                   <div key={field.id}>
                     <strong style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{field.name}</strong>
-                    <div style={{ fontSize: '0.95rem', marginTop: '0.25rem' }}>{value}</div>
+                    <div style={{ fontSize: '0.95rem', marginTop: '0.25rem' }}>{displayVal}</div>
                   </div>
                 );
               })}

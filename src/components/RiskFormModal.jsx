@@ -7,6 +7,7 @@ const RiskFormModal = ({ onClose, onRiskAdded, initialRisk, onRiskUpdated, readO
   const [loading, setLoading] = useState(false);
   const [fieldDefs, setFieldDefs] = useState([]);
   const [customValues, setCustomValues] = useState({});
+  const [dashboardSettings, setDashboardSettings] = useState(null);
 
   // Tab 1: General
   const [itemType, setItemType] = useState(initialRisk?.itemType || 'Risk');
@@ -39,11 +40,12 @@ const RiskFormModal = ({ onClose, onRiskAdded, initialRisk, onRiskUpdated, readO
   const [planRealism, setPlanRealism] = useState(initialRisk?.planRealism || '');
 
   useEffect(() => {
-    apiFetch('http://localhost:3000/api/fields/risk')
-      .then(res => res.json())
-      .then(data => { 
-        if (Array.isArray(data)) {
-          setFieldDefs(data);
+    Promise.all([
+      apiFetch('http://localhost:3000/api/fields/risk').then(res => res.json()),
+      apiFetch('http://localhost:3000/api/dashboardSettings').then(res => res.json())
+    ]).then(([fieldsData, settingsData]) => {
+        if (Array.isArray(fieldsData)) {
+          setFieldDefs(fieldsData);
           if (initialRisk && initialRisk.customFields) {
             const initialCustoms = {};
             initialRisk.customFields.forEach(cf => {
@@ -51,7 +53,10 @@ const RiskFormModal = ({ onClose, onRiskAdded, initialRisk, onRiskUpdated, readO
             });
             setCustomValues(initialCustoms);
           }
-        } 
+        }
+        if (settingsData && !settingsData.error) {
+          setDashboardSettings(settingsData);
+        }
       })
       .catch(console.error);
   }, [initialRisk]);
@@ -137,6 +142,35 @@ const RiskFormModal = ({ onClose, onRiskAdded, initialRisk, onRiskUpdated, readO
     flex: 1
   });
 
+  const renderPicklist = (key, value, onChange, placeholder = "Select...", isCustom = false) => {
+    const pl = dashboardSettings?.picklists?.[isCustom ? `custom_${key}` : key] || { options: [], isMultiSelect: false };
+    if (pl.isMultiSelect) {
+      const valArray = Array.isArray(value) ? value : (value ? (typeof value === 'string' ? value.split(',').map(s=>s.trim()) : [value]) : []);
+      return (
+        <select 
+          className="form-input" 
+          multiple 
+          value={valArray} 
+          onChange={e => {
+            const selected = Array.from(e.target.selectedOptions, option => option.value);
+            onChange(selected);
+          }}
+          style={{ minHeight: '80px', padding: '0.5rem' }}
+        >
+          {pl.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+        </select>
+      );
+    } else {
+      const valStr = Array.isArray(value) ? value[0] : value;
+      return (
+        <select className="form-input" value={valStr || ''} onChange={e => onChange(e.target.value)}>
+          <option value="" disabled>{placeholder}</option>
+          {pl.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+        </select>
+      );
+    }
+  };
+
   return (
     <div className="modal-overlay">
       <div className="modal-content card" style={{ maxWidth: '800px', width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
@@ -179,27 +213,15 @@ const RiskFormModal = ({ onClose, onRiskAdded, initialRisk, onRiskUpdated, readO
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
               <div>
                 <label className="form-label">Level</label>
-                <select className="form-input" value={level} onChange={e => setLevel(e.target.value)}>
-                  <option>Program</option>
-                  <option>Internal</option>
-                </select>
+                {renderPicklist('level', level, setLevel, "Select Level")}
               </div>
               <div>
                 <label className="form-label">Category</label>
-                <select className="form-input" value={riskCategory} onChange={e => setRiskCategory(e.target.value)}>
-                  <option>Schedule</option>
-                  <option>Cost</option>
-                  <option>Technical</option>
-                </select>
+                {renderPicklist('riskCategory', riskCategory, setRiskCategory, "Select Category")}
               </div>
               <div>
                 <label className="form-label">Handling Strategy</label>
-                <select className="form-input" value={handlingStrategy} onChange={e => setHandlingStrategy(e.target.value)}>
-                  <option>Accept</option>
-                  <option>Decline</option>
-                  <option>Transfer</option>
-                  <option>Mitigate/Execute</option>
-                </select>
+                {renderPicklist('handlingStrategy', handlingStrategy, setHandlingStrategy, "Select Strategy")}
               </div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
@@ -305,11 +327,15 @@ const RiskFormModal = ({ onClose, onRiskAdded, initialRisk, onRiskUpdated, readO
                   {fieldDefs.map(field => (
                     <div key={field.id}>
                       <label className="form-label">{field.name} {field.required && <span style={{ color: 'var(--danger)' }}>*</span>}</label>
-                      <input
-                        type={field.fieldType === 'number' ? 'number' : field.fieldType === 'date' ? 'date' : 'text'}
-                        className="form-input" required={field.required}
-                        value={customValues[field.name] || ''} onChange={e => handleCustomChange(field.name, e.target.value)}
-                      />
+                      {field.fieldType === 'picklist' ? (
+                        renderPicklist(field.name, customValues[field.name], val => handleCustomChange(field.name, val), "Select...", true)
+                      ) : (
+                        <input
+                          type={field.fieldType === 'number' ? 'number' : field.fieldType === 'date' ? 'date' : 'text'}
+                          className="form-input" required={field.required}
+                          value={customValues[field.name] || ''} onChange={e => handleCustomChange(field.name, e.target.value)}
+                        />
+                      )}
                     </div>
                   ))}
                 </div>
