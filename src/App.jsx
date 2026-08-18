@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 import Dashboard from './pages/Dashboard';
 import RiskTable from './pages/RiskTable';
 import AdminPage from './pages/AdminPage';
 import LandingPage from './pages/LandingPage';
+import ErrorBoundary from './components/ErrorBoundary';
 import './index.css';
 
-function AppContent({ fileKey, isAdminAuthenticated, setIsAdminAuthenticated }) {
+function AppContent({ fileKey }) {
   const navigate = useNavigate();
   const prevFileKey = React.useRef(fileKey);
 
@@ -34,9 +36,10 @@ function AppContent({ fileKey, isAdminAuthenticated, setIsAdminAuthenticated }) 
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/table" element={<RiskTable />} />
-          <Route path="/admin" element={<AdminPage isAdminAuthenticated={isAdminAuthenticated} setIsAdminAuthenticated={setIsAdminAuthenticated} />} />
+          <Route path="/admin" element={<AdminPage />} />
         </Routes>
       </main>
+      <Toaster position="bottom-right" toastOptions={{ style: { background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--border)' } }} />
     </div>
   );
 }
@@ -44,13 +47,11 @@ function AppContent({ fileKey, isAdminAuthenticated, setIsAdminAuthenticated }) 
 function App() {
   const [fileKey, setFileKey] = useState(0);
   const [isAppReady, setIsAppReady] = useState(false);
-  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
 
   useEffect(() => {
     if (window.electron && window.electron.ipcRenderer) {
       window.electron.ipcRenderer.on('file-changed', () => {
         setIsAppReady(true);
-        setIsAdminAuthenticated(false);
         setFileKey(prev => prev + 1);
       });
     }
@@ -61,13 +62,11 @@ function App() {
   }
 
   return (
-    <Router>
-      <AppContent 
-        fileKey={fileKey} 
-        isAdminAuthenticated={isAdminAuthenticated} 
-        setIsAdminAuthenticated={setIsAdminAuthenticated} 
-      />
-    </Router>
+    <ErrorBoundary>
+      <Router>
+        <AppContent fileKey={fileKey} />
+      </Router>
+    </ErrorBoundary>
   );
 }
 

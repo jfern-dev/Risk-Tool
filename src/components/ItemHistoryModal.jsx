@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import RiskFormModal from './RiskFormModal';
 import { RotateCcw } from 'lucide-react';
+import ConfirmModal from '../components/ConfirmModal';
 
 const ItemHistoryModal = ({ risk, onClose, onRestore }) => {
   const snapshots = risk.snapshots || [];
+  const [confirmRestoreId, setConfirmRestoreId] = useState(null);
   
   if (snapshots.length === 0) {
     return (
@@ -47,10 +49,9 @@ const ItemHistoryModal = ({ risk, onClose, onRestore }) => {
   const selectedSnapshot = snapshots.find(s => s.id === selectedSnapId) || snapshots[0];
 
   const handleRestore = async () => {
-    if (window.confirm(`Are you sure you want to restore this version from ${new Date(selectedSnapshot.date).toLocaleString()}? This will overwrite the current item.`)) {
-      if (onRestore) {
-        await onRestore(selectedSnapshot);
-      }
+    if (onRestore) {
+      await onRestore(selectedSnapshot);
+      setConfirmRestoreId(null);
     }
   };
 
@@ -83,7 +84,7 @@ const ItemHistoryModal = ({ risk, onClose, onRestore }) => {
           ))}
         </select>
 
-        <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', padding: '0.25rem 0.75rem' }} onClick={handleRestore}>
+        <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', padding: '0.25rem 0.75rem' }} onClick={() => setConfirmRestoreId(selectedSnapshot.id)}>
           <RotateCcw size={14} /> Restore
         </button>
       </div>
@@ -91,13 +92,23 @@ const ItemHistoryModal = ({ risk, onClose, onRestore }) => {
   );
 
   return (
-    <RiskFormModal
-      key={selectedSnapId}
-      initialRisk={selectedSnapshot.data}
-      readOnly={true}
-      customHeader={customHeader}
-      onClose={onClose}
-    />
+    <>
+      <RiskFormModal
+        key={selectedSnapId}
+        initialRisk={selectedSnapshot.data}
+        readOnly={true}
+        customHeader={customHeader}
+        onClose={onClose}
+      />
+      <ConfirmModal
+        isOpen={!!confirmRestoreId}
+        onClose={() => setConfirmRestoreId(null)}
+        onConfirm={handleRestore}
+        title="Restore Version"
+        message={`Are you sure you want to restore this version from ${selectedSnapshot ? new Date(selectedSnapshot.date).toLocaleString() : ''}? This will overwrite the current item.`}
+        confirmText="Restore"
+      />
+    </>
   );
 };
 

@@ -61,7 +61,10 @@ const RiskDetailsModal = ({ risk, onClose, onActionClick }) => {
 
             <div>
               <strong style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Description</strong>
-              <div style={{ fontSize: '1rem', marginTop: '0.25rem', whiteSpace: 'pre-wrap' }}>{risk.description || 'No description provided.'}</div>
+              <div 
+                style={{ fontSize: '1rem', marginTop: '0.25rem', whiteSpace: 'pre-wrap' }} 
+                dangerouslySetInnerHTML={{ __html: risk.description || 'No description provided.' }}
+              />
             </div>
 
             {/* Configurable/Dynamic Fields */}
@@ -86,7 +89,14 @@ const RiskDetailsModal = ({ risk, onClose, onActionClick }) => {
                 return (
                   <div key={field.id} style={{ gridColumn: field.fullWidth ? '1 / -1' : 'auto' }}>
                     <strong style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{field.label}</strong>
-                    <div style={{ fontSize: '0.95rem', marginTop: '0.25rem', whiteSpace: field.fullWidth ? 'pre-wrap' : 'normal' }}>{displayVal}</div>
+                    {field.id === 'impactStatement' ? (
+                      <div 
+                        style={{ fontSize: '0.95rem', marginTop: '0.25rem', whiteSpace: 'pre-wrap' }} 
+                        dangerouslySetInnerHTML={{ __html: displayVal }} 
+                      />
+                    ) : (
+                      <div style={{ fontSize: '0.95rem', marginTop: '0.25rem', whiteSpace: field.fullWidth ? 'pre-wrap' : 'normal' }}>{displayVal}</div>
+                    )}
                   </div>
                 );
               })}

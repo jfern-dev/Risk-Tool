@@ -29,7 +29,7 @@ export const getIssueScoreClass = (impact) => {
   return 'score-extreme';
 };
 
-const RiskMatrix = ({ risks, activeType = 'Risk', hideIds = false }) => {
+const RiskMatrix = ({ risks, activeType = 'Risk', hideIds = false, isPrint = false }) => {
   
   if (activeType === 'Issue') {
     const cells = [];
@@ -39,7 +39,7 @@ const RiskMatrix = ({ risks, activeType = 'Risk', hideIds = false }) => {
         <div 
           key={`issue-${i}`} 
           className={`matrix-cell ${getIssueScoreClass(i)}`} 
-          title={`Impact: ${i}`}
+          title={`Consequence: ${i}`}
           style={{ padding: '4px', overflowY: 'auto' }}
         >
           {cellRisks.length > 0 && (
@@ -56,8 +56,8 @@ const RiskMatrix = ({ risks, activeType = 'Risk', hideIds = false }) => {
     }
     
     return (
-      <div className="card">
-        <h2>Issue Matrix</h2>
+      <div className={isPrint ? '' : 'card'}>
+        {!isPrint && <h2>Issue Matrix</h2>}
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
           <div style={{ flex: 1 }}>
             <div className="risk-matrix-1x5">
@@ -71,7 +71,7 @@ const RiskMatrix = ({ risks, activeType = 'Risk', hideIds = false }) => {
               <div>5 (Extreme)</div>
             </div>
             <div style={{ textAlign: 'center', fontWeight: 'bold', marginTop: '0.5rem' }}>
-              Impact
+              Consequence
             </div>
           </div>
         </div>
@@ -130,7 +130,7 @@ const RiskMatrix = ({ risks, activeType = 'Risk', hideIds = false }) => {
         <div 
           key={`${l}-${i}`} 
           className={`matrix-cell ${cellClass}`} 
-          title={isCombined && l === 6 ? `Issue Impact: ${i}` : `Likelihood: ${l}, Impact: ${i}`}
+          title={isCombined && l === 6 ? `Issue Consequence: ${i}` : `Probability: ${l}, Consequence: ${i}`}
           style={{ padding: '4px', overflowY: 'auto' }}
         >
           {markersToRender.length > 0 && (
@@ -156,8 +156,8 @@ const RiskMatrix = ({ risks, activeType = 'Risk', hideIds = false }) => {
   }
 
   return (
-    <div className="card">
-      <h2>{activeType} Matrix</h2>
+    <div className={isPrint ? '' : 'card'}>
+      {!isPrint && <h2>{isCombined ? 'Combined RIO Matrix' : `${activeType} Matrix`}</h2>}
       <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
           {isCombined && (
@@ -166,7 +166,7 @@ const RiskMatrix = ({ risks, activeType = 'Risk', hideIds = false }) => {
             </div>
           )}
           <div style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', textAlign: 'center', fontWeight: 'bold' }}>
-            Likelihood
+            Probability
           </div>
         </div>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
@@ -201,7 +201,7 @@ const RiskMatrix = ({ risks, activeType = 'Risk', hideIds = false }) => {
                 <div>5 (Extreme)</div>
               </div>
               <div style={{ textAlign: 'center', fontWeight: 'bold', marginTop: '0.5rem' }}>
-                Impact
+                Consequence
               </div>
               {hideIds && (
                 <div style={{ display: 'flex', justifyContent: 'center', gap: '2rem', marginTop: '1.5rem', fontSize: '0.85rem' }}>

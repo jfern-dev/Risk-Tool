@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, CheckCircle, Pencil, Save } from 'lucide-react';
 import { apiFetch } from '../utils/api';
+import { toast } from 'react-hot-toast';
 
 const StepRow = ({ step, riskId, onStepUpdated, onComplete }) => {
   const [isEditing, setIsEditing] = useState(false);
@@ -34,7 +35,7 @@ const StepRow = ({ step, riskId, onStepUpdated, onComplete }) => {
       onStepUpdated(updated);
       setIsEditing(false);
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     } finally {
       setSaving(false);
     }
@@ -51,8 +52,8 @@ const StepRow = ({ step, riskId, onStepUpdated, onComplete }) => {
           <span>Target: {new Date(step.targetDate).toLocaleDateString()}</span>
           {step.completedAt && <span>Actual: {new Date(step.completedAt).toLocaleDateString()}</span>}
           <span>Assignees: {step.assignees}</span>
-          <span>Likelihood Red.: {step.likelihoodReduction || 0}</span>
-          <span>Impact Red.: {step.impactReduction || 0}</span>
+          <span>Probability Red.: {step.likelihoodReduction || 0}</span>
+          <span>Consequence Red.: {step.impactReduction || 0}</span>
         </div>
       </div>
     );
@@ -100,8 +101,8 @@ const StepRow = ({ step, riskId, onStepUpdated, onComplete }) => {
           <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
             <span>Target: {new Date(step.targetDate).toLocaleDateString()}</span>
             <span>Assignees: {step.assignees}</span>
-            <span>L Reduction: {step.likelihoodReduction || 0}</span>
-            <span>I Reduction: {step.impactReduction || 0}</span>
+            <span>P Reduction: {step.likelihoodReduction || 0}</span>
+            <span>C Reduction: {step.impactReduction || 0}</span>
           </div>
           {step.impactOnConsequence && (
             <p style={{ fontSize: '0.8rem', margin: '0.5rem 0 0 0', color: 'var(--text-muted)' }}>
@@ -191,7 +192,7 @@ const BurndownModal = ({ risk, onClose, onRiskUpdated }) => {
       setLikelihoodReduction(0); setImpactReduction(0); setCustomValues({});
     } catch (err) {
       console.error(err);
-      alert('Error creating burndown step.');
+      toast.error('Error creating burndown step.');
     } finally {
       setLoading(false);
     }
@@ -217,7 +218,7 @@ const BurndownModal = ({ risk, onClose, onRiskUpdated }) => {
       setCompletingStep(null);
     } catch (err) {
       console.error(err);
-      alert('Error completing step.');
+      toast.error('Error completing step.');
     }
   };
 
@@ -282,11 +283,11 @@ const BurndownModal = ({ risk, onClose, onRiskUpdated }) => {
                 <input type="text" className="form-input" value={assignees} onChange={e => setAssignees(e.target.value)} placeholder="Comma-separated" />
               </div>
               <div>
-                <label className="form-label">Likelihood Reduction</label>
+                <label className="form-label">Probability Reduction</label>
                 <input type="number" min="0" max="5" className="form-input" value={likelihoodReduction} onChange={e => setLikelihoodReduction(Number(e.target.value))} />
               </div>
               <div>
-                <label className="form-label">Impact Reduction</label>
+                <label className="form-label">Consequence Reduction</label>
                 <input type="number" min="0" max="5" className="form-input" value={impactReduction} onChange={e => setImpactReduction(Number(e.target.value))} />
               </div>
             </div>
@@ -339,12 +340,12 @@ const BurndownModal = ({ risk, onClose, onRiskUpdated }) => {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', margin: '1.5rem 0' }}>
               {risk.itemType !== 'Issue' && (
                 <div>
-                  <label className="form-label">New Likelihood (1-5)</label>
+                  <label className="form-label">New Probability (1-5)</label>
                   <input type="number" min="1" max="5" className="form-input" value={actualLikelihood} onChange={e => setActualLikelihood(Number(e.target.value))} />
                 </div>
               )}
               <div>
-                <label className="form-label">New Impact (1-5)</label>
+                <label className="form-label">New Consequence (1-5)</label>
                 <input type="number" min="1" max="5" className="form-input" value={actualImpact} onChange={e => setActualImpact(Number(e.target.value))} />
               </div>
             </div>

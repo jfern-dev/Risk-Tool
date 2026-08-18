@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Clock, PlusCircle } from 'lucide-react';
 import { apiFetch } from '../utils/api';
+import { toast } from 'react-hot-toast';
 
 const StatusLogModal = ({ risk, onClose, onRiskUpdated }) => {
   const [status, setStatus] = useState('');
@@ -43,7 +44,7 @@ const StatusLogModal = ({ risk, onClose, onRiskUpdated }) => {
       setIsAdding(false);
     } catch (err) {
       console.error(err);
-      alert('Error creating status log.');
+      toast.error('Error creating status log.');
     } finally {
       setLoading(false);
     }

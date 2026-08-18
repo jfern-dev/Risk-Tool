@@ -9,11 +9,14 @@ import StatusLogModal from '../components/StatusLogModal';
 import SnapshotModal from '../components/SnapshotModal';
 import ItemHistoryModal from '../components/ItemHistoryModal';
 import RiskDetailsModal from '../components/RiskDetailsModal';
+import PdfReport from '../components/PdfReport';
+import { toast } from 'react-hot-toast';
 import { apiFetch } from '../utils/api';
 
 const Dashboard = () => {
   const [risks, setRisks] = useState([]);
   const [snapshots, setSnapshots] = useState([]);
+  const [fields, setFields] = useState([]);
   const [selectedSnapshotId, setSelectedSnapshotId] = useState('current');
   const [activeItemType, setActiveItemType] = useState('Risk');
   const [activeLevelFilter, setActiveLevelFilter] = useState('All');
@@ -28,24 +31,26 @@ const Dashboard = () => {
   const [activeHistoryRisk, setActiveHistoryRisk] = useState(null);
   const [isGlobalSnapshotModalOpen, setIsGlobalSnapshotModalOpen] = useState(false);
   const [activeRiskDetails, setActiveRiskDetails] = useState(null);
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [newPassword, setNewPassword] = useState('');
 
   const loadData = async () => {
     try {
-      const [resRisks, resSnaps] = await Promise.all([
+      const [resRisks, resSnaps, resFields] = await Promise.all([
         apiFetch('http://localhost:3000/api/risks'),
-        apiFetch('http://localhost:3000/api/snapshots')
+        apiFetch('http://localhost:3000/api/snapshots'),
+        apiFetch('http://localhost:3000/api/fields')
       ]);
       const dataRisks = await resRisks.json();
       const dataSnaps = await resSnaps.json();
+      const dataFields = await resFields.json();
       
       setRisks(Array.isArray(dataRisks) ? dataRisks : []);
       setSnapshots(Array.isArray(dataSnaps) ? dataSnaps : []);
+      setFields(Array.isArray(dataFields) ? dataFields : []);
     } catch (err) {
       console.error(err);
       setRisks([]);
       setSnapshots([]);
+      setFields([]);
     } finally {
       setLoading(false);
     }
@@ -53,6 +58,32 @@ const Dashboard = () => {
 
   useEffect(() => {
     loadData();
+  }, []);
+
+  // Keyboard Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Ignore if user is typing in an input or textarea
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) || e.target.isContentEditable) return;
+
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      const cmdKey = isMac ? e.metaKey : e.ctrlKey;
+
+      if (cmdKey && e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        setIsModalOpen(true);
+      }
+      
+      if (cmdKey && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        window.electron.ipcRenderer.invoke('api-save').then(saved => {
+          if (saved) toast.success('Workspace saved successfully');
+        }).catch(() => toast.error('File operation failed'));
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   const handleCreateGlobalSnapshot = async (note) => {
@@ -69,7 +100,7 @@ const Dashboard = () => {
         setIsGlobalSnapshotModalOpen(false);
       }
     } catch (err) {
-      alert('Failed to create global snapshot');
+      toast.error('Failed to create global snapshot');
     }
   };
 
@@ -87,7 +118,7 @@ const Dashboard = () => {
         setItemToSnapshot(null);
       }
     } catch (err) {
-      alert('Failed to create item snapshot');
+      toast.error('Failed to create item snapshot');
     }
   };
 
@@ -107,7 +138,7 @@ const Dashboard = () => {
         }
       }
     } catch (err) {
-      alert('Failed to restore item');
+      toast.error('Failed to restore item');
     }
   };
 
@@ -115,39 +146,86 @@ const Dashboard = () => {
     const displayRisks = selectedSnapshotId === 'current' ? risks : snapshots.find(s => s.id === parseInt(selectedSnapshotId))?.risks || [];
     
     if (displayRisks.length === 0) {
-      alert("No risks to export");
+      toast.error("No risks to export");
       return;
     }
 
+    const customHeaders = fields.map(f => f.name);
+    
     const headers = [
       "Risk ID", "Title", "Level", "Category", "Handling Strategy", 
-      "Likelihood", "Impact", "Score", "Description", "Impact Statement",
+      "Probability", "Consequence", "Score", "Description", "Impact Statement",
       "Cost Impact", "Schedule Impact", "Performance Impact",
       "Is SPoF", "SPoF Description", "Resource Cost", "Resource Schedule",
-      "Plan Realism", "GPOCs", "CPOCs"
+      "Plan Realism", "GPOCs", "CPOCs", "Action Plan", "Burndown Steps", ...customHeaders
     ];
 
-    const rows = displayRisks.map(r => [
-      r.userRiskId, r.title, r.level, r.riskCategory, r.handlingStrategy,
-      r.likelihood, r.impact, (r.likelihood || 0) * (r.impact || 0),
-      `"${(r.description || '').replace(/"/g, '""')}"`,
-      `"${(r.impactStatement || '').replace(/"/g, '""')}"`,
-      r.impactCost, r.impactSchedule, r.impactPerformance,
-      r.isSpof ? 'Yes' : 'No', `"${(r.spofDescription || '').replace(/"/g, '""')}"`,
-      r.resourceCostNeeded, r.resourceScheduleNeeded,
-      `"${(r.planRealism || '').replace(/"/g, '""')}"`, r.gpocs, r.cpocs
-    ]);
+    const formatCSV = (val) => {
+      if (Array.isArray(val)) val = val.join(', ');
+      if (val === null || val === undefined) val = '';
+      return `"${String(val).replace(/"/g, '""')}"`;
+    };
 
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+    const rows = displayRisks.map(r => {
+      const customData = fields.map(f => {
+        let val = '';
+        if (r.customFields && r.customFields.length > 0) {
+          const latestCf = r.customFields[r.customFields.length - 1];
+          const entries = latestCf.fields || (Array.isArray(latestCf) ? latestCf : []);
+          const fieldEntry = entries.find(cf => cf.name === f.name || cf.id === f.id);
+          if (fieldEntry) val = fieldEntry.value;
+        }
+        return formatCSV(val);
+      });
+      
+      const burndownText = (r.burndownSteps || []).map((step, idx) => {
+        const dateStr = step.isCompleted ? `Done ${step.completedAt?.substring(0,10) || ''}` : `Target ${step.targetDate?.substring(0,10) || ''}`;
+        return `Step ${idx + 1}: ${step.description} [${dateStr}]`;
+      }).join(' | ');
 
-    const encodedUri = encodeURI(csvContent);
+      return [
+        r.userRiskId, r.title, r.level, r.riskCategory, r.handlingStrategy,
+        r.likelihood, r.impact, (r.likelihood || 0) * (r.impact || 0),
+        r.description, r.impactStatement,
+        r.impactCost, r.impactSchedule, r.impactPerformance,
+        r.isSpof ? 'Yes' : 'No', r.spofDescription,
+        r.resourceCostNeeded, r.resourceScheduleNeeded,
+        r.planRealism, r.gpocs, r.cpocs,
+        r.mitigationPlan, burndownText
+      ].map(formatCSV).concat(customData);
+    });
+
+    const csvString = [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+    
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
+    link.setAttribute("href", url);
     link.setAttribute("download", `erm_export_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleFileAction = async (action) => {
+    try {
+      if (action === 'new') await window.electron.ipcRenderer.invoke('api-new-file');
+      if (action === 'open') await window.electron.ipcRenderer.invoke('api-open-file');
+      if (action === 'save') {
+        const saved = await window.electron.ipcRenderer.invoke('api-save');
+        if (saved) toast.success('Workspace saved successfully');
+      }
+      if (action === 'save-as') {
+        const saved = await window.electron.ipcRenderer.invoke('api-save-as');
+        if (saved) toast.success('Workspace saved successfully');
+      }
+      if (action === 'snapshot') setIsGlobalSnapshotModalOpen(true);
+      if (action === 'csv') handleExportCSV();
+      if (action === 'print') window.print();
+    } catch (err) {
+      toast.error('File operation failed');
+    }
   };
 
   if (loading) return <div className="container" style={{ textAlign: 'center', padding: '4rem' }}>Loading ERM Data...</div>;
@@ -211,22 +289,18 @@ const Dashboard = () => {
             value=""
             onChange={(e) => {
               const action = e.target.value;
-              if (action === 'new') setShowPasswordModal(true);
-              if (action === 'open') window.electron.ipcRenderer.invoke('api-open-file');
-              if (action === 'save') window.electron.ipcRenderer.invoke('api-save');
-              if (action === 'save-as') window.electron.ipcRenderer.invoke('api-save-as');
-              if (action === 'snapshot') setIsGlobalSnapshotModalOpen(true);
-              if (action === 'csv') handleExportCSV();
+              handleFileAction(action);
               e.target.value = ''; // Reset selection
             }}
           >
-            <option value="" disabled>File Actions...</option>
-            <option value="new">New File</option>
-            <option value="open">Open File...</option>
-            <option value="save">Save</option>
+            <option value="" disabled>Data Actions...</option>
+            <option value="new">Create New Workspace</option>
+            <option value="open">Open Workspace...</option>
+            <option value="save">Save Workspace</option>
             <option value="save-as">Save As...</option>
-            <option value="snapshot">Create Global Snapshot</option>
+            <option value="snapshot">Create Global Snapshot...</option>
             <option value="csv">Export to CSV</option>
+            <option value="print">Export to PDF (Print)</option>
           </select>
           <button className="btn" onClick={() => setIsModalOpen(true)}>
             <PlusCircle size={18} style={{ marginRight: '8px' }} />
@@ -241,20 +315,27 @@ const Dashboard = () => {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: '2rem', alignItems: 'flex-start' }}>
-        
-        {/* Left Column: List */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-            <h3 style={{ margin: 0 }}>{activeItemType} Register</h3>
-            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{displayRisks.length} item{displayRisks.length !== 1 ? 's' : ''}</span>
+      {displayRisks.length === 0 ? (
+        <div className="card" style={{ padding: '4rem 2rem', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', borderStyle: 'dashed' }}>
+          <div style={{ width: '64px', height: '64px', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
+            <PlusCircle size={32} />
           </div>
-
-          {displayRisks.length === 0 ? (
-            <div className="card" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
-              No items identified yet.
+          <h3 style={{ margin: 0, fontSize: '1.5rem' }}>Your workspace is empty</h3>
+          <p style={{ color: 'var(--text-muted)', maxWidth: '400px', margin: '0 auto' }}>Get started by creating your first Risk, Issue, or Opportunity to track it across your project lifecycle.</p>
+          <button className="btn btn-primary" onClick={() => setIsModalOpen(true)} style={{ marginTop: '1rem' }}>
+            <PlusCircle size={18} />
+            Create First Item
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: '2rem', alignItems: 'flex-start' }}>
+          {/* Left Column: List */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <h3 style={{ margin: 0 }}>{activeItemType} Register</h3>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{displayRisks.length} item{displayRisks.length !== 1 ? 's' : ''}</span>
             </div>
-          ) : displayRisks.map(risk => {
+            {displayRisks.map(risk => {
               const score = (risk.likelihood || 0) * (risk.impact || 0);
               
               // Calculate Delta
@@ -304,7 +385,7 @@ const Dashboard = () => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexShrink: 0 }}>
                       {deltaIcon && <div style={{ display: 'flex', alignItems: 'center', marginRight: '4px' }}>{deltaIcon}</div>}
                       <span style={{ padding: '2px 10px', borderRadius: '12px', fontSize: '0.8rem', background: 'var(--border)', whiteSpace: 'nowrap' }}>
-                        {currentItemType !== 'Issue' && `L: ${risk.likelihood} | `} I: {risk.impact}
+                        {currentItemType !== 'Issue' && `P: ${risk.likelihood} | `} C: {risk.impact}
                       </span>
                       <span className={badgeClass} style={{ padding: '2px 10px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 700, whiteSpace: 'nowrap', border: 'none' }}>
                         Score: {currentItemType === 'Issue' ? risk.impact : score}
@@ -321,7 +402,8 @@ const Dashboard = () => {
         <div style={{ width: '480px', flexShrink: 0, position: 'sticky', top: '2rem' }}>
           <RiskMatrix risks={displayRisks} activeType={activeItemType} />
         </div>
-      </div>
+        </div>
+      )}
 
       {activeRiskDetails && (
         <RiskDetailsModal 
@@ -427,36 +509,10 @@ const Dashboard = () => {
         />
       )}
 
-      {showPasswordModal && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000
-        }}>
-          <div className="card" style={{ maxWidth: '400px', width: '100%', padding: '2rem' }}>
-            <h3 style={{ marginTop: 0, marginBottom: '1rem', color: 'var(--primary)' }}>Set Admin Password</h3>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-              Create a password to protect the Admin settings for this new workspace.
-            </p>
-            <input
-              type="password"
-              className="form-input"
-              style={{ marginBottom: '1.5rem' }}
-              value={newPassword}
-              onChange={e => setNewPassword(e.target.value)}
-              placeholder="Enter password..."
-              autoFocus
-            />
-            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
-              <button className="btn" style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)' }} onClick={() => setShowPasswordModal(false)}>Cancel</button>
-              <button className="btn" onClick={() => {
-                window.electron.ipcRenderer.invoke('api-new-file', newPassword);
-                setShowPasswordModal(false);
-                setNewPassword('');
-              }}>Create Workspace</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Hidden during normal use, visible only when printing */}
+      <PdfReport 
+        risks={displayRisks} 
+      />
     </div>
   );
 };

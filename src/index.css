@@ -166,3 +166,81 @@ h1, h2, h3 {
   border-color: var(--primary);
   box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.3);
 }
+
+/* React Quill Dark Mode Overrides */
+.ql-toolbar.ql-snow {
+  background-color: var(--surface);
+  border-color: var(--border) !important;
+}
+.ql-container.ql-snow {
+  border-color: var(--border) !important;
+  font-family: inherit;
+  font-size: 1rem;
+}
+.ql-toolbar.ql-snow .ql-picker,
+.ql-toolbar.ql-snow .ql-stroke {
+  stroke: var(--text-muted);
+}
+.ql-toolbar.ql-snow .ql-fill {
+  fill: var(--text-muted);
+}
+.ql-toolbar.ql-snow .ql-picker-label {
+  color: var(--text-muted);
+}
+.ql-editor {
+  min-height: 120px;
+}
+
+/* Print / PDF Export Styles */
+.print-only {
+  display: none !important;
+}
+
+@media print {
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  @page {
+    size: landscape;
+    margin: 5mm;
+  }
+  body {
+    background: white;
+    color: black;
+  }
+  
+  /* Hide normal UI */
+  .app-sidebar,
+  button,
+  .modal-overlay,
+  select,
+  .app-content > .container {
+    display: none !important;
+  }
+  
+  /* Show print report */
+  .print-only {
+    display: block !important;
+  }
+  
+  /* Reset background and remove shadows for print */
+  .card {
+    box-shadow: none;
+    border: 1px solid #ccc;
+    background: white;
+  }
+  .container {
+    padding: 0;
+  }
+
+  /* Each risk on a new page */
+  .print-page {
+    page-break-after: always;
+    page-break-inside: avoid;
+    width: 100%;
+  }
+  .print-page:last-child {
+    page-break-after: auto;
+  }
+}

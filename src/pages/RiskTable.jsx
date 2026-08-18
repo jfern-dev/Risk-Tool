@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { toast } from 'react-hot-toast';
 import { apiFetch } from '../utils/api';
 import { getScoreClass, getOppScoreClass, getIssueScoreClass } from '../components/RiskMatrix';
 
@@ -96,6 +97,9 @@ const EditableCell = ({ value, field, type = 'text', options = [], onSave }) => 
     );
   }
 
+  const displayValue = Array.isArray(value) ? (value.length ? value.join(', ') : null) : value;
+  const strippedValue = typeof displayValue === 'string' && type === 'textarea' ? displayValue.replace(/<[^>]+>/g, '') : displayValue;
+
   return (
     <div 
       onClick={() => setIsEditing(true)} 
@@ -107,7 +111,7 @@ const EditableCell = ({ value, field, type = 'text', options = [], onSave }) => 
       onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
       onMouseOut={e => e.currentTarget.style.background = 'transparent'}
     >
-      {Array.isArray(value) ? (value.length ? value.join(', ') : <span style={{ color: 'var(--text-muted)' }}>Empty</span>) : (value || <span style={{ color: 'var(--text-muted)' }}>Empty</span>)}
+      {strippedValue || <span style={{ color: 'var(--text-muted)' }}>Empty</span>}
     </div>
   );
 };
@@ -129,6 +133,7 @@ const RiskTable = () => {
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState('All');
   const [dashboardSettings, setDashboardSettings] = useState(null);
+  const [sortConfig, setSortConfig] = useState({ key: 'userRiskId', direction: 'asc' });
 
   useEffect(() => {
     Promise.all([
@@ -179,7 +184,7 @@ const RiskTable = () => {
       const updatedRisk = await response.json();
       setRisks(prev => prev.map(r => r.id === id ? { ...r, ...updatedRisk } : r));
     } catch (error) {
-      alert(error.message);
+      toast.error(error.message);
       // rollback handled by refetch ideally, but omitting for brevity
     }
   };
@@ -204,13 +209,43 @@ const RiskTable = () => {
       const newRisk = await response.json();
       setRisks(prev => [...prev, newRisk]);
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
   if (loading) return <div className="container" style={{ textAlign: 'center', padding: '4rem' }}>Loading Table...</div>;
 
   const filteredRisks = risks.filter(r => filterType === 'All' || (r.itemType || 'Risk') === filterType);
+  
+  const sortedRisks = [...filteredRisks].sort((a, b) => {
+    let aValue = a[sortConfig.key] ?? '';
+    let bValue = b[sortConfig.key] ?? '';
+    
+    // Custom logic for score
+    if (sortConfig.key === 'score') {
+      aValue = (a.likelihood || 0) * (a.impact || 0);
+      bValue = (b.likelihood || 0) * (b.impact || 0);
+    }
+    
+    if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+    if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  const handleSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
+    setSortConfig({ key, direction });
+  };
+
+  const SortHeader = ({ label, sortKey }) => (
+    <th 
+      style={{ padding: '0.75rem', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', userSelect: 'none' }}
+      onClick={() => handleSort(sortKey)}
+    >
+      {label} {sortConfig.key === sortKey ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
+    </th>
+  );
 
   return (
     <div className="container" style={{ maxWidth: '100%', padding: '2rem 1rem' }}>
@@ -236,18 +271,18 @@ const RiskTable = () => {
         <table style={{ width: 'max-content', minWidth: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
           <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--surface)' }}>
             <tr style={{ background: 'rgba(0,0,0,0.3)', borderBottom: '2px solid var(--border)' }}>
-              <th style={{ padding: '0.75rem', fontWeight: 600 }}>ID</th>
-              <th style={{ padding: '0.75rem', fontWeight: 600 }}>Type</th>
-              <th style={{ padding: '0.75rem', fontWeight: 600 }}>Title</th>
-              <th style={{ padding: '0.75rem', fontWeight: 600 }}>Level</th>
-              <th style={{ padding: '0.75rem', fontWeight: 600 }}>Category</th>
-              <th style={{ padding: '0.75rem', fontWeight: 600 }}>Strategy</th>
-              <th style={{ padding: '0.75rem', fontWeight: 600 }}>GPOCs</th>
-              <th style={{ padding: '0.75rem', fontWeight: 600 }}>CPOCs</th>
-              <th style={{ padding: '0.75rem', fontWeight: 600 }}>Description</th>
-              <th style={{ padding: '0.75rem', fontWeight: 600, whiteSpace: 'nowrap' }}>L</th>
-              <th style={{ padding: '0.75rem', fontWeight: 600, whiteSpace: 'nowrap' }}>I</th>
-              <th style={{ padding: '0.75rem', fontWeight: 600, whiteSpace: 'nowrap' }}>Score</th>
+              <SortHeader label="ID" sortKey="userRiskId" />
+              <SortHeader label="Type" sortKey="itemType" />
+              <SortHeader label="Title" sortKey="title" />
+              <SortHeader label="Level" sortKey="level" />
+              <SortHeader label="Category" sortKey="riskCategory" />
+              <SortHeader label="Strategy" sortKey="handlingStrategy" />
+              <SortHeader label="GPOCs" sortKey="gpocs" />
+              <SortHeader label="CPOCs" sortKey="cpocs" />
+              <SortHeader label="Description" sortKey="description" />
+              <SortHeader label="P" sortKey="likelihood" />
+              <SortHeader label="C" sortKey="impact" />
+              <SortHeader label="Score" sortKey="score" />
               <th style={{ padding: '0.75rem', fontWeight: 600 }}>Impact Statement</th>
               <th style={{ padding: '0.75rem', fontWeight: 600 }}>Impact (Cost)</th>
               <th style={{ padding: '0.75rem', fontWeight: 600 }}>Impact (Sched)</th>
@@ -263,12 +298,12 @@ const RiskTable = () => {
             </tr>
           </thead>
           <tbody>
-            {filteredRisks.length === 0 ? (
+            {sortedRisks.length === 0 ? (
               <tr>
                 <td colSpan={25 + riskFields.length} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>No items found.</td>
               </tr>
             ) : (
-              filteredRisks.map(risk => {
+              sortedRisks.map(risk => {
                 const type = risk.itemType || 'Risk';
                 const l = risk.likelihood || 1;
                 const i = risk.impact || 1;

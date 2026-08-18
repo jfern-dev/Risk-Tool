@@ -1,7 +1,11 @@
 import React from 'react';
 import { X, File, Plus, Trash2 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
+import ConfirmModal from '../components/ConfirmModal';
 
 const AttachmentsModal = ({ risk, onClose, onAttachmentAdded, onAttachmentRemoved }) => {
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+
   const handleAdd = async () => {
     try {
       const newAttachment = await window.electron.ipcRenderer.invoke('api-add-attachment', risk.id);
@@ -10,7 +14,7 @@ const AttachmentsModal = ({ risk, onClose, onAttachmentAdded, onAttachmentRemove
       }
     } catch (err) {
       console.error(err);
-      alert('Failed to add attachment');
+      toast.error('Failed to add attachment');
     }
   };
 
@@ -19,19 +23,19 @@ const AttachmentsModal = ({ risk, onClose, onAttachmentAdded, onAttachmentRemove
       await window.electron.ipcRenderer.invoke('api-open-attachment', filename);
     } catch (err) {
       console.error(err);
-      alert('Failed to open attachment');
+      toast.error('Failed to open attachment');
     }
   };
 
-  const handleDelete = async (e, attachmentId) => {
-    e.stopPropagation();
-    if (!confirm('Are you sure you want to remove this attachment?')) return;
+  const handleRemove = async (attachmentId) => {
     try {
       await window.electron.ipcRenderer.invoke('api-delete-attachment', risk.id, attachmentId);
       onAttachmentRemoved(attachmentId);
+      setConfirmDeleteId(null);
+      toast.success('Attachment deleted');
     } catch (err) {
       console.error(err);
-      alert('Failed to delete attachment');
+      toast.error('Failed to delete attachment');
     }
   };
 
@@ -71,9 +75,9 @@ const AttachmentsModal = ({ risk, onClose, onAttachmentAdded, onAttachmentRemove
                 </div>
                 <button 
                   className="btn btn-icon" 
-                  onClick={(e) => handleDelete(e, att.id)} 
+                  title="Remove Attachment" 
+                  onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(att.id); }}
                   style={{ marginLeft: 'auto', padding: '0.25rem' }}
-                  title="Remove attachment"
                 >
                   <Trash2 size={18} color="var(--danger)" />
                 </button>
@@ -90,6 +94,14 @@ const AttachmentsModal = ({ risk, onClose, onAttachmentAdded, onAttachmentRemove
           </button>
         </div>
       </div>
+      <ConfirmModal
+        isOpen={!!confirmDeleteId}
+        onClose={() => setConfirmDeleteId(null)}
+        onConfirm={() => handleRemove(confirmDeleteId)}
+        title="Remove Attachment"
+        message="Are you sure you want to remove this attachment? This action cannot be undone."
+        confirmText="Remove"
+      />
     </div>
   );
 };

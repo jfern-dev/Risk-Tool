@@ -56,7 +56,7 @@ let appData = {
     hiddenFields: [],
     picklists: {
       level: { options: ['Program', 'Internal'], isMultiSelect: false },
-      riskCategory: { options: ['Schedule', 'Cost', 'Technical'], isMultiSelect: false },
+      riskCategory: { options: ['Schedule', 'Cost', 'Technical'], isMultiSelect: true },
       handlingStrategy: { options: ['Accept', 'Decline', 'Transfer', 'Mitigate/Execute'], isMultiSelect: false }
     }
   }
@@ -95,7 +95,9 @@ const autoSaveToTemp = async () => {
 };
 
 const handleSave = async (isSaveAs = false) => {
+  console.log('handleSave called! isSaveAs:', isSaveAs, 'currentFilePath:', currentFilePath);
   if (!currentFilePath || isSaveAs) {
+    console.log('Prompting save dialog...');
     const result = await dialog.showSaveDialog(mainWindow, {
       title: 'Save ERM Data',
       defaultPath: currentFilePath || 'erm-data.erm',
@@ -104,20 +106,25 @@ const handleSave = async (isSaveAs = false) => {
         { name: 'All Files', extensions: ['*'] }
       ]
     });
+    console.log('Save dialog result:', result);
     if (result.canceled || !result.filePath) return false;
     currentFilePath = result.filePath;
   }
   
   try {
+    console.log('Auto saving to temp...', workDir);
     await autoSaveToTemp();
     
+    console.log('Creating zip at:', currentFilePath);
     const zip = new AdmZip();
     zip.addLocalFolder(workDir);
     zip.writeZip(currentFilePath);
+    console.log('Zip write complete');
     
     mainWindow.setTitle(`Risk Tool - ${path.basename(currentFilePath)}`);
     return true;
   } catch (error) {
+    console.error('Save error thrown:', error);
     dialog.showErrorBox('Save Error', `Could not save file: ${error.message}`);
     return false;
   }
@@ -166,7 +173,7 @@ const handleOpenFile = async () => {
       if (!appData.dashboardSettings.picklists) {
         appData.dashboardSettings.picklists = {
           level: { options: ['Program', 'Internal'], isMultiSelect: false },
-          riskCategory: { options: ['Schedule', 'Cost', 'Technical'], isMultiSelect: false },
+          riskCategory: { options: ['Schedule', 'Cost', 'Technical'], isMultiSelect: true },
           handlingStrategy: { options: ['Accept', 'Decline', 'Transfer', 'Mitigate/Execute'], isMultiSelect: false }
         };
       }
@@ -183,7 +190,7 @@ const handleOpenFile = async () => {
   return false;
 };
 
-const handleNewFile = async (password = null) => {
+const handleNewFile = async () => {
   appData = { 
     risks: [], 
     fields: [], 
@@ -192,14 +199,11 @@ const handleNewFile = async (password = null) => {
       hiddenFields: [],
       picklists: {
         level: { options: ['Program', 'Internal'], isMultiSelect: false },
-        riskCategory: { options: ['Schedule', 'Cost', 'Technical'], isMultiSelect: false },
+        riskCategory: { options: ['Schedule', 'Cost', 'Technical'], isMultiSelect: true },
         handlingStrategy: { options: ['Accept', 'Decline', 'Transfer', 'Mitigate/Execute'], isMultiSelect: false }
       }
     }
   };
-  if (password) {
-    appData.adminPassword = password;
-  }
   currentFilePath = null;
   await initWorkDir();
   mainWindow.setTitle('Risk Tool - Untitled');
@@ -324,17 +328,9 @@ app.on('window-all-closed', () => {
 });
 
 // IPC Handlers: Mini-router
-ipcMain.handle('api-new-file', async (event, password) => {
-  await handleNewFile(password);
+ipcMain.handle('api-new-file', async () => {
+  await handleNewFile();
   return true;
-});
-
-ipcMain.handle('api-has-password', async () => {
-  return !!appData.adminPassword;
-});
-
-ipcMain.handle('api-verify-password', async (event, password) => {
-  return appData.adminPassword === password;
 });
 
 ipcMain.handle('api-save', async () => {
@@ -427,7 +423,7 @@ ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => 
       if (!appData.dashboardSettings.picklists) {
         appData.dashboardSettings.picklists = {
           level: { options: ['Program', 'Internal'], isMultiSelect: false },
-          riskCategory: { options: ['Schedule', 'Cost', 'Technical'], isMultiSelect: false },
+          riskCategory: { options: ['Schedule', 'Cost', 'Technical'], isMultiSelect: true },
           handlingStrategy: { options: ['Accept', 'Decline', 'Transfer', 'Mitigate/Execute'], isMultiSelect: false }
         };
       }

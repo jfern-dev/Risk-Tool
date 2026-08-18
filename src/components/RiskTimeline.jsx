@@ -4,7 +4,7 @@ import {
 } from 'recharts';
 import { format } from 'date-fns';
 
-const RiskTimeline = ({ risk }) => {
+const RiskTimeline = ({ risk, isPrint = false }) => {
   if (!risk.burndownSteps || risk.burndownSteps.length === 0) {
     return null;
   }
@@ -85,18 +85,17 @@ const RiskTimeline = ({ risk }) => {
   }
 
   const formatXAxis = (tickItem) => {
-    return format(new Date(tickItem), 'MMM d, yy');
+    return new Date(tickItem).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' });
   };
 
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', padding: '10px', borderRadius: '4px' }}>
-          <p style={{ margin: 0, fontWeight: 'bold' }}>{format(new Date(label), 'MMM d, yyyy')}</p>
-          {data.label && data.label !== 'Today' && data.label !== 'Identified' && (
-            <p style={{ margin: '4px 0', fontSize: '0.85rem', color: 'var(--text)' }}>Step: {data.label}</p>
-          )}
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', padding: '10px', borderRadius: '4px', boxShadow: 'var(--shadow)' }}>
+          <p style={{ margin: '0 0 8px 0', fontWeight: 'bold' }}>{new Date(label).toLocaleDateString()}</p>
+          <p style={{ margin: '0 0 4px 0', fontSize: '0.9rem', color: 'var(--text)' }}>{data.event}</p>
+          {data.isProjected && <span style={{ fontSize: '0.75rem', background: 'var(--warning)', color: 'black', padding: '2px 6px', borderRadius: '4px', marginBottom: '8px', display: 'inline-block' }}>Projected</span>}
           <p style={{ margin: '4px 0', color: 'var(--text-muted)', fontWeight: 'bold' }}>Target Score: {data.targetScore}</p>
           <p style={{ margin: 0, color: 'var(--primary)', fontWeight: 'bold' }}>Actual Score: {data.actualScore}</p>
         </div>
@@ -105,51 +104,61 @@ const RiskTimeline = ({ risk }) => {
     return null;
   };
 
+  const ChartContent = (
+    <LineChart data={points} margin={{ top: 15, right: 20, left: -20, bottom: 0 }} width={isPrint ? 800 : undefined} height={isPrint ? 200 : undefined}>
+      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+      <XAxis 
+        dataKey="date" 
+        type="number" 
+        domain={[(dataMin) => dataMin - (7 * 24 * 60 * 60 * 1000), 'dataMax']}
+        tickFormatter={formatXAxis} 
+        stroke="var(--text-muted)"
+        fontSize={11}
+        tickMargin={8}
+      />
+      <YAxis 
+        stroke="var(--text-muted)" 
+        fontSize={11}
+        domain={[0, 25]} 
+        ticks={[0, 5, 10, 15, 20, 25]}
+      />
+      <Tooltip content={<CustomTooltip />} />
+      <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '0.85rem' }} />
+      <ReferenceLine x={today} stroke="var(--danger)" strokeDasharray="3 3" label={{ position: 'top', value: 'Today', fill: 'var(--danger)', fontSize: 11 }} />
+      <Line 
+        name="Target Risk Score"
+        type="stepAfter" 
+        dataKey="targetScore" 
+        stroke="var(--text-muted)" 
+        strokeWidth={2}
+        strokeDasharray="4 4"
+        dot={{ r: 3, fill: 'var(--text-muted)' }}
+        activeDot={{ r: 5 }}
+        isAnimationActive={!isPrint}
+      />
+      <Line 
+        name="Actual Risk Score"
+        type="monotone" 
+        dataKey="actualScore" 
+        stroke="var(--primary)" 
+        strokeWidth={3}
+        dot={{ r: 4, fill: 'var(--primary)' }}
+        activeDot={{ r: 6 }}
+        isAnimationActive={!isPrint}
+      />
+    </LineChart>
+  );
+
   return (
     <div style={{ height: '220px', width: '100%', marginTop: '1.5rem', marginBottom: '0.5rem' }}>
       <h5 style={{ margin: '0 0 1rem 0', color: 'var(--text-muted)', fontSize: '0.9rem' }}>Burndown Timeline</h5>
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={points} margin={{ top: 15, right: 20, left: -20, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-          <XAxis 
-            dataKey="date" 
-            type="number" 
-            domain={[(dataMin) => dataMin - (7 * 24 * 60 * 60 * 1000), 'dataMax']}
-            tickFormatter={formatXAxis} 
-            stroke="var(--text-muted)"
-            fontSize={11}
-            tickMargin={8}
-          />
-          <YAxis 
-            stroke="var(--text-muted)" 
-            fontSize={11}
-            domain={[0, 25]} 
-            ticks={[0, 5, 10, 15, 20, 25]}
-          />
-          <Tooltip content={<CustomTooltip />} />
-          <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '0.85rem' }} />
-          <ReferenceLine x={today} stroke="var(--danger)" strokeDasharray="3 3" label={{ position: 'top', value: 'Today', fill: 'var(--danger)', fontSize: 11 }} />
-          <Line 
-            name="Target Risk Score"
-            type="stepAfter" 
-            dataKey="targetScore" 
-            stroke="var(--text-muted)" 
-            strokeWidth={2}
-            strokeDasharray="4 4"
-            dot={{ r: 3, fill: 'var(--text-muted)' }}
-            activeDot={{ r: 5 }}
-          />
-          <Line 
-            name="Actual Risk Score"
-            type="stepAfter" 
-            dataKey="actualScore" 
-            stroke="var(--primary)" 
-            strokeWidth={3}
-            dot={{ r: 4, fill: 'var(--primary)', stroke: 'var(--bg)', strokeWidth: 2 }}
-            activeDot={{ r: 6 }}
-          />
-        </LineChart>
-      </ResponsiveContainer>
+      {isPrint ? (
+        ChartContent
+      ) : (
+        <ResponsiveContainer width="100%" height="100%">
+          {ChartContent}
+        </ResponsiveContainer>
+      )}
     </div>
   );
 };

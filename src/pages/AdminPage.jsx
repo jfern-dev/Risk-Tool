@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { PlusCircle, Trash2, Settings } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import { apiFetch } from '../utils/api';
+import ConfirmModal from '../components/ConfirmModal';
 
 const FIELD_TYPES = [
   { value: 'text', label: 'Text' },
@@ -9,15 +11,13 @@ const FIELD_TYPES = [
   { value: 'picklist', label: 'Picklist' }
 ];
 
-const AdminPage = ({ isAdminAuthenticated, setIsAdminAuthenticated }) => {
+const AdminPage = () => {
   const [fields, setFields] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [checkingAuth, setCheckingAuth] = useState(true);
-  const [passwordInput, setPasswordInput] = useState('');
-  const [authError, setAuthError] = useState('');
   const [activeTab, setActiveTab] = useState('risk');
   const [dashboardSettings, setDashboardSettings] = useState({ hiddenFields: [] });
   const [savingSettings, setSavingSettings] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   // New field form
   const [newName, setNewName] = useState('');
@@ -27,37 +27,8 @@ const AdminPage = ({ isAdminAuthenticated, setIsAdminAuthenticated }) => {
 
 
   useEffect(() => {
-    checkAuthStatus();
     fetchData();
   }, []);
-
-  const checkAuthStatus = async () => {
-    try {
-      const hasPassword = await window.electron.ipcRenderer.invoke('api-has-password');
-      if (!hasPassword) {
-        setIsAdminAuthenticated(true);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setCheckingAuth(false);
-    }
-  };
-
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setAuthError('');
-    try {
-      const isValid = await window.electron.ipcRenderer.invoke('api-verify-password', passwordInput);
-      if (isValid) {
-        setIsAdminAuthenticated(true);
-      } else {
-        setAuthError('Incorrect password');
-      }
-    } catch (err) {
-      setAuthError('Error verifying password');
-    }
-  };
 
   const fetchData = async () => {
     try {
@@ -99,20 +70,21 @@ const AdminPage = ({ isAdminAuthenticated, setIsAdminAuthenticated }) => {
       setNewType('text');
       setNewRequired(false);
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     } finally {
       setAdding(false);
     }
   };
 
   const handleDeleteField = async (id) => {
-    if (!window.confirm('Delete this custom field definition? This will not remove data already saved.')) return;
     try {
       const res = await apiFetch(`http://localhost:3000/api/fields/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete');
       setFields(fields.filter(f => f.id !== id));
+      toast.success('Field deleted');
+      setConfirmDeleteId(null);
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -141,7 +113,7 @@ const AdminPage = ({ isAdminAuthenticated, setIsAdminAuthenticated }) => {
       const savedSettings = await res.json();
       setDashboardSettings(savedSettings);
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     } finally {
       setSavingSettings(false);
     }
@@ -166,7 +138,7 @@ const AdminPage = ({ isAdminAuthenticated, setIsAdminAuthenticated }) => {
       const savedSettings = await res.json();
       setDashboardSettings(savedSettings);
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     } finally {
       setSavingSettings(false);
     }
@@ -180,37 +152,10 @@ const AdminPage = ({ isAdminAuthenticated, setIsAdminAuthenticated }) => {
   ];
 
 
-  if (loading || checkingAuth) {
+  if (loading) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', padding: '3rem' }}>
         <p style={{ color: 'var(--text-muted)' }}>Loading...</p>
-      </div>
-    );
-  }
-
-  if (!isAdminAuthenticated) {
-    return (
-      <div className="container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
-        <div className="card" style={{ maxWidth: '400px', width: '100%' }}>
-          <h2 style={{ marginTop: 0, marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary)' }}>
-            <Settings size={24} />
-            Admin Login
-          </h2>
-          <form onSubmit={handleLogin}>
-            <div style={{ marginBottom: '1rem' }}>
-              <label className="form-label">Password</label>
-              <input
-                type="password"
-                className="form-input"
-                value={passwordInput}
-                onChange={e => setPasswordInput(e.target.value)}
-                autoFocus
-              />
-            </div>
-            {authError && <p style={{ color: 'var(--danger)', fontSize: '0.9rem', marginBottom: '1rem' }}>{authError}</p>}
-            <button type="submit" className="btn" style={{ width: '100%' }}>Login</button>
-          </form>
-        </div>
       </div>
     );
   }
@@ -278,13 +223,30 @@ const AdminPage = ({ isAdminAuthenticated, setIsAdminAuthenticated }) => {
             background: activeTab === 'picklists' ? 'var(--primary)' : 'transparent',
             color: activeTab === 'picklists' ? '#fff' : 'var(--text-muted)',
             border: '1px solid var(--border)',
-            borderRadius: '0 8px 8px 0',
+            borderRadius: '0',
+            borderLeft: 'none',
+            borderRight: 'none',
             cursor: 'pointer',
             fontWeight: 600,
             transition: 'all 0.2s ease'
           }}
         >
           Picklists
+        </button>
+        <button
+          onClick={() => setActiveTab('export')}
+          style={{
+            padding: '0.75rem 1.5rem',
+            background: activeTab === 'export' ? 'var(--primary)' : 'transparent',
+            color: activeTab === 'export' ? '#fff' : 'var(--text-muted)',
+            border: '1px solid var(--border)',
+            borderRadius: '0 8px 8px 0',
+            cursor: 'pointer',
+            fontWeight: 600,
+            transition: 'all 0.2s ease'
+          }}
+        >
+          Data Export
         </button>
       </div>
 
@@ -319,7 +281,7 @@ const AdminPage = ({ isAdminAuthenticated, setIsAdminAuthenticated }) => {
                         </span>
                       )}
                     </div>
-                    <button onClick={() => handleDeleteField(field.id)} style={{ background: 'transparent', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '0.25rem' }}>
+                    <button onClick={() => setConfirmDeleteId(field.id)} style={{ background: 'transparent', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '0.25rem' }}>
                       <Trash2 size={18} />
                     </button>
                   </div>
@@ -482,6 +444,46 @@ const AdminPage = ({ isAdminAuthenticated, setIsAdminAuthenticated }) => {
           </div>
         </div>
       )}
+
+      {/* EXPORT GUIDE CONTENT */}
+      {activeTab === 'export' && (
+        <div className="card">
+          <h3 style={{ marginTop: 0, color: 'var(--primary)' }}>CSV Export Guide</h3>
+          <p style={{ color: 'var(--text-muted)', lineHeight: '1.6' }}>
+            The CSV Export feature allows you to extract your risk data into a spreadsheet. The data exported depends on your current view in the Dashboard:
+          </p>
+          <ul style={{ color: 'var(--text-muted)', lineHeight: '1.6', marginBottom: '2rem' }}>
+            <li><strong>Current View:</strong> If you are viewing the live Dashboard, the export will contain all current active risks and their data.</li>
+            <li><strong>Snapshot View:</strong> If you select a specific Snapshot from the dropdown on the Dashboard, the CSV export will extract the risks exactly as they existed at the time that snapshot was created.</li>
+          </ul>
+          
+          <h4 style={{ color: 'var(--text)', marginBottom: '1rem' }}>What is Included?</h4>
+          <p style={{ color: 'var(--text-muted)', lineHeight: '1.6' }}>
+            The export generates a flat list of risks. It includes:
+          </p>
+          <ul style={{ color: 'var(--text-muted)', lineHeight: '1.6' }}>
+            <li><strong>Standard Fields:</strong> Risk ID, Title, Level, Category, Strategy, Probability, Consequence, Score, Description, Impact Statement, SPoF data, POCs, and Resource details.</li>
+            <li><strong>Action Plan:</strong> The Action Plan (Mitigation Plan) text for each risk is included as a dedicated column.</li>
+            <li><strong>Burndown Steps:</strong> All active and completed burndown steps are formatted chronologically in a single column.</li>
+            <li><strong>Custom Fields:</strong> Any custom fields you have defined in the Admin panel will be automatically appended as columns at the end of the export.</li>
+          </ul>
+          
+          <div style={{ padding: '1rem', background: 'rgba(15, 23, 42, 0.5)', borderRadius: '8px', border: '1px solid var(--border)', marginTop: '2rem' }}>
+            <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+              <em>Note:</em> The export does not include the full history log or file attachments. It provides a high-level summary suitable for reporting.
+            </p>
+          </div>
+        </div>
+      )}
+
+      <ConfirmModal 
+        isOpen={!!confirmDeleteId}
+        onClose={() => setConfirmDeleteId(null)}
+        onConfirm={() => handleDeleteField(confirmDeleteId)}
+        title="Delete Custom Field"
+        message="Are you sure you want to delete this custom field definition? Data already saved in individual risks will not be removed."
+        confirmText="Delete Field"
+      />
     </div>
   );
 };

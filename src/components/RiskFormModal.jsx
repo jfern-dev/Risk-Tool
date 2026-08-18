@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
+import { toast } from 'react-hot-toast';
+import ReactQuill from 'react-quill-new';
+import 'react-quill-new/dist/quill.snow.css';
 import { apiFetch } from '../utils/api';
 
 const RiskFormModal = ({ onClose, onRiskAdded, initialRisk, onRiskUpdated, readOnly = false, customHeader = null }) => {
@@ -14,7 +17,7 @@ const RiskFormModal = ({ onClose, onRiskAdded, initialRisk, onRiskUpdated, readO
   const [userRiskId, setUserRiskId] = useState(initialRisk?.userRiskId || '');
   const [title, setTitle] = useState(initialRisk?.title || '');
   const [level, setLevel] = useState(initialRisk?.level || 'Program');
-  const [riskCategory, setRiskCategory] = useState(initialRisk?.riskCategory || 'Technical');
+  const [riskCategory, setRiskCategory] = useState(initialRisk?.riskCategory || ['Technical']);
   const [handlingStrategy, setHandlingStrategy] = useState(initialRisk?.handlingStrategy || 'Mitigate/Execute');
   const [gpocs, setGpocs] = useState(initialRisk?.gpocs || '');
   const [cpocs, setCpocs] = useState(initialRisk?.cpocs || '');
@@ -67,6 +70,25 @@ const RiskFormModal = ({ onClose, onRiskAdded, initialRisk, onRiskUpdated, readO
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Validation
+    if (!title.trim()) {
+      toast.error('Title is required.');
+      return;
+    }
+
+    if (discoveredDate && closedDate && new Date(closedDate) < new Date(discoveredDate)) {
+      toast.error('Closed Date cannot be earlier than Discovered Date.');
+      return;
+    }
+
+    // Custom Fields Validation
+    const missingRequired = fieldDefs.filter(f => f.required && !customValues[f.name]);
+    if (missingRequired.length > 0) {
+      toast.error(`Please fill out required fields: ${missingRequired.map(f => f.name).join(', ')}`);
+      return;
+    }
+
     setLoading(true);
 
     const finalLikelihood = itemType === 'Issue' ? 5 : likelihood;
@@ -126,7 +148,7 @@ const RiskFormModal = ({ onClose, onRiskAdded, initialRisk, onRiskUpdated, readO
       onClose();
     } catch (err) {
       console.error(err);
-      alert(err.message || 'Error saving risk.');
+      toast.error(err.message || 'Error saving risk.');
     } finally {
       setLoading(false);
     }
@@ -174,7 +196,7 @@ const RiskFormModal = ({ onClose, onRiskAdded, initialRisk, onRiskUpdated, readO
   return (
     <div className="modal-overlay">
       <div className="modal-content card" style={{ maxWidth: '800px', width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexShrink: 0 }}>
           {customHeader ? customHeader : <h2 style={{ margin: 0 }}>{initialRisk ? (readOnly ? 'View' : 'Edit') : 'Add New'} R/I/O</h2>}
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
             <X size={24} />
@@ -182,13 +204,13 @@ const RiskFormModal = ({ onClose, onRiskAdded, initialRisk, onRiskUpdated, readO
         </div>
 
         {/* Tab Header */}
-        <div style={{ display: 'flex', marginBottom: '1.5rem', borderRadius: '8px', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', marginBottom: '1.5rem', borderRadius: '8px', overflow: 'hidden', flexShrink: 0, position: 'relative', zIndex: 10 }}>
           <button type="button" onClick={() => setActiveTab('general')} style={{ ...tabStyle('general'), borderRight: 'none' }}>1. General</button>
           <button type="button" onClick={() => setActiveTab('details')} style={{ ...tabStyle('details'), borderRight: 'none' }}>2. Details & Impact</button>
           <button type="button" onClick={() => setActiveTab('resources')} style={tabStyle('resources')}>3. Resources</button>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, overflowY: 'auto', paddingRight: '10px' }}>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, overflowY: 'auto', paddingRight: '10px', minHeight: 0 }}>
           <fieldset disabled={readOnly} style={{ border: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {/* TAB 1: GENERAL */}
           <div style={{ display: activeTab === 'general' ? 'flex' : 'none', flexDirection: 'column', gap: '1rem' }}>
@@ -252,13 +274,17 @@ const RiskFormModal = ({ onClose, onRiskAdded, initialRisk, onRiskUpdated, readO
 
           {/* TAB 2: DETAILS & IMPACT */}
           <div style={{ display: activeTab === 'details' ? 'flex' : 'none', flexDirection: 'column', gap: '1rem' }}>
-            <div>
-              <label className="form-label">Description (Risk/Issue/Opportunity)</label>
-              <textarea className="form-input" rows="3" value={description} onChange={e => setDescription(e.target.value)} />
+            <div style={{ marginBottom: '2rem' }}>
+              <label className="form-label" style={{ marginBottom: '0.5rem' }}>Description (Risk/Issue/Opportunity)</label>
+              <div style={{ background: 'var(--surface)', color: 'var(--text)' }}>
+                <ReactQuill theme="snow" value={description} onChange={setDescription} />
+              </div>
             </div>
-            <div>
-              <label className="form-label">General Impact Statement</label>
-              <textarea className="form-input" rows="2" value={impactStatement} onChange={e => setImpactStatement(e.target.value)} />
+            <div style={{ marginBottom: '2rem' }}>
+              <label className="form-label" style={{ marginBottom: '0.5rem' }}>General Impact Statement</label>
+              <div style={{ background: 'var(--surface)', color: 'var(--text)' }}>
+                <ReactQuill theme="snow" value={impactStatement} onChange={setImpactStatement} />
+              </div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
               <div>
@@ -291,12 +317,12 @@ const RiskFormModal = ({ onClose, onRiskAdded, initialRisk, onRiskUpdated, readO
             <div style={{ display: 'grid', gridTemplateColumns: itemType === 'Issue' ? '1fr' : '1fr 1fr', gap: '1rem' }}>
               {itemType !== 'Issue' && (
                 <div>
-                  <label className="form-label">Likelihood (1-5)</label>
+                  <label className="form-label">Probability (1-5)</label>
                   <input required type="number" min="1" max="5" className="form-input" value={likelihood} onChange={e => setLikelihood(Number(e.target.value))} />
                 </div>
               )}
               <div>
-                <label className="form-label">Consequence / Impact (1-5)</label>
+                <label className="form-label">Consequence (1-5)</label>
                 <input required type="number" min="1" max="5" className="form-input" value={impact} onChange={e => setImpact(Number(e.target.value))} />
               </div>
             </div>
