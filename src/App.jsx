@@ -4,7 +4,7 @@ import { Toaster } from 'react-hot-toast';
 import Dashboard from './pages/Dashboard';
 import RiskTable from './pages/RiskTable';
 import AdminPage from './pages/AdminPage';
-import LandingPage from './pages/LandingPage';
+import MonteCarloAnalysis from './pages/MonteCarloAnalysis';
 import ErrorBoundary from './components/ErrorBoundary';
 import './index.css';
 
@@ -20,14 +20,57 @@ function AppContent({ fileKey }) {
     }
   }, [fileKey, navigate]);
 
+  const handleFileAction = async (action) => {
+    try {
+      if (action === 'new') await window.electron.ipcRenderer.invoke('api-new-file');
+      if (action === 'open') await window.electron.ipcRenderer.invoke('api-open-file');
+      if (action === 'save') {
+        const saved = await window.electron.ipcRenderer.invoke('api-save');
+        if (saved) toast.success('Workspace saved successfully');
+      }
+      if (action === 'save-as') {
+        const saved = await window.electron.ipcRenderer.invoke('api-save-as');
+        if (saved) toast.success('Workspace saved successfully');
+      }
+    } catch (err) {
+      toast.error('File operation failed');
+    }
+  };
+
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <header style={{ background: 'var(--surface)', padding: '1rem 2rem', borderBottom: '1px solid var(--border)' }}>
         <div className="container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0' }}>
-          <h1 style={{ margin: 0, fontSize: '1.5rem', color: 'var(--primary)' }}>Risk Tool</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+            <h1 style={{ margin: 0, fontSize: '1.5rem', color: 'var(--primary)' }}>Risk Tool</h1>
+            <select
+              className="form-input"
+              style={{ padding: '0.5rem', width: 'auto', background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', cursor: 'pointer' }}
+              value=""
+              onChange={(e) => {
+                const action = e.target.value;
+                if (['new', 'open', 'save', 'save-as'].includes(action)) {
+                  handleFileAction(action);
+                } else {
+                  window.dispatchEvent(new CustomEvent('app-action', { detail: action }));
+                }
+                e.target.value = '';
+              }}
+            >
+              <option value="" disabled>Data Actions...</option>
+              <option value="new">Create New Workspace</option>
+              <option value="open">Open Workspace...</option>
+              <option value="save">Workspace Save</option>
+              <option value="save-as">Workspace Save As...</option>
+              <option value="snapshot">Create Global Snapshot...</option>
+              <option value="csv">Export to CSV</option>
+              <option value="print">Export to PDF (Print)</option>
+            </select>
+          </div>
           <nav style={{ display: 'flex', gap: '1.5rem' }}>
             <Link to="/" style={{ color: 'var(--text)', textDecoration: 'none', fontWeight: 500 }}>Dashboard</Link>
             <Link to="/table" style={{ color: 'var(--text)', textDecoration: 'none', fontWeight: 500 }}>Data Table</Link>
+            <Link to="/montecarlo" style={{ color: 'var(--text)', textDecoration: 'none', fontWeight: 500 }}>Monte Carlo</Link>
             <Link to="/admin" style={{ color: 'var(--text)', textDecoration: 'none', fontWeight: 500 }}>Admin</Link>
           </nav>
         </div>
@@ -36,6 +79,7 @@ function AppContent({ fileKey }) {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/table" element={<RiskTable />} />
+          <Route path="/montecarlo" element={<MonteCarloAnalysis />} />
           <Route path="/admin" element={<AdminPage />} />
         </Routes>
       </main>
@@ -46,20 +90,16 @@ function AppContent({ fileKey }) {
 
 function App() {
   const [fileKey, setFileKey] = useState(0);
-  const [isAppReady, setIsAppReady] = useState(false);
-
   useEffect(() => {
     if (window.electron && window.electron.ipcRenderer) {
       window.electron.ipcRenderer.on('file-changed', () => {
-        setIsAppReady(true);
         setFileKey(prev => prev + 1);
       });
+      return () => {
+        window.electron.ipcRenderer.removeAllListeners('file-changed');
+      };
     }
   }, []);
-
-  if (!isAppReady) {
-    return <LandingPage />;
-  }
 
   return (
     <ErrorBoundary>

@@ -234,6 +234,23 @@ const AdminPage = () => {
           Picklists
         </button>
         <button
+          onClick={() => setActiveTab('montecarlo')}
+          style={{
+            padding: '0.75rem 1.5rem',
+            background: activeTab === 'montecarlo' ? 'var(--primary)' : 'transparent',
+            color: activeTab === 'montecarlo' ? '#fff' : 'var(--text-muted)',
+            border: '1px solid var(--border)',
+            borderRadius: '0',
+            borderLeft: 'none',
+            borderRight: 'none',
+            cursor: 'pointer',
+            fontWeight: 600,
+            transition: 'all 0.2s ease'
+          }}
+        >
+          Monte Carlo
+        </button>
+        <button
           onClick={() => setActiveTab('export')}
           style={{
             padding: '0.75rem 1.5rem',
@@ -441,6 +458,100 @@ const AdminPage = () => {
                  </div>
                );
             })}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'montecarlo' && (
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>Monte Carlo Probability Mapping</h3>
+          <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '0.95rem' }}>
+            Map the qualitative 1-5 Probability score to quantitative percentages used in the Monte Carlo simulation engine.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: '400px' }}>
+            {[1, 2, 3, 4, 5].map(score => (
+              <div key={score} style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <label className="form-label" style={{ marginBottom: 0, width: '120px' }}>Score {score} maps to:</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    className="form-input"
+                    placeholder="Min"
+                    value={dashboardSettings.probabilityMapping?.[score]?.min ?? 0}
+                    onChange={(e) => {
+                      const current = dashboardSettings.probabilityMapping?.[score] || { min: 0, max: 0 };
+                      const newMapping = { ...(dashboardSettings.probabilityMapping || {}), [score]: { ...current, min: Number(e.target.value) } };
+                      setDashboardSettings({ ...dashboardSettings, probabilityMapping: newMapping });
+                    }}
+                  />
+                  <span>% to</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    className="form-input"
+                    placeholder="Max"
+                    value={dashboardSettings.probabilityMapping?.[score]?.max ?? 0}
+                    onChange={(e) => {
+                      const current = dashboardSettings.probabilityMapping?.[score] || { min: 0, max: 0 };
+                      const newMapping = { ...(dashboardSettings.probabilityMapping || {}), [score]: { ...current, max: Number(e.target.value) } };
+                      setDashboardSettings({ ...dashboardSettings, probabilityMapping: newMapping });
+                    }}
+                  />
+                  <span>%</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop: '2rem' }}>
+            <button
+              className="btn"
+              disabled={savingSettings}
+              onClick={async () => {
+                const mapping = dashboardSettings.probabilityMapping || {};
+                
+                // Validations
+                for (let i = 1; i <= 5; i++) {
+                  const current = mapping[i] || { min: 0, max: 0 };
+                  if (current.min < 0 || current.max > 100) {
+                    toast.error(`Score ${i} range must be between 0 and 100.`);
+                    return;
+                  }
+                  if (current.min > current.max) {
+                    toast.error(`Score ${i}: Min cannot be greater than Max.`);
+                    return;
+                  }
+                  if (i > 1) {
+                    const prev = mapping[i - 1] || { min: 0, max: 0 };
+                    if (current.min <= prev.max) {
+                      toast.error(`Score ${i} Min (${current.min}%) must be greater than Score ${i - 1} Max (${prev.max}%) to avoid overlap.`);
+                      return;
+                    }
+                  }
+                }
+
+                if (window.confirm('WARNING: Changing these mappings will retroactively affect the Monte Carlo calculations for all existing risks. Are you sure?')) {
+                  setSavingSettings(true);
+                  try {
+                    const res = await apiFetch('http://localhost:3000/api/dashboardSettings', {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(dashboardSettings)
+                    });
+                    if (!res.ok) throw new Error('Failed to save mapping');
+                    toast.success('Mappings saved');
+                  } catch (err) {
+                    toast.error(err.message);
+                  } finally {
+                    setSavingSettings(false);
+                  }
+                }
+              }}
+            >
+              {savingSettings ? 'Saving...' : 'Save Probability Mappings'}
+            </button>
           </div>
         </div>
       )}

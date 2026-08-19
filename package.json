@@ -1,7 +1,7 @@
 {
   "name": "risk-tool",
   "private": true,
-  "version": "5.4.0",
+  "version": "6.0.0",
   "repository": "https://github.com/jfern-dev/Risk-Tool",
   "main": "electron/main.js",
   "type": "module",

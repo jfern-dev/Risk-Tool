@@ -42,6 +42,16 @@ const RiskFormModal = ({ onClose, onRiskAdded, initialRisk, onRiskUpdated, readO
   const [resourceScheduleNeeded, setResourceScheduleNeeded] = useState(initialRisk?.resourceScheduleNeeded || '');
   const [planRealism, setPlanRealism] = useState(initialRisk?.planRealism || '');
 
+  // Tab 4: Monte Carlo
+  const [mcMinCost, setMcMinCost] = useState(initialRisk?.mcMinCost || 0);
+  const [mcMostLikelyCost, setMcMostLikelyCost] = useState(initialRisk?.mcMostLikelyCost || 0);
+  const [mcMaxCost, setMcMaxCost] = useState(initialRisk?.mcMaxCost || 0);
+  const [mcMinSchedule, setMcMinSchedule] = useState(initialRisk?.mcMinSchedule || 0);
+  const [mcMostLikelySchedule, setMcMostLikelySchedule] = useState(initialRisk?.mcMostLikelySchedule || 0);
+  const [mcMaxSchedule, setMcMaxSchedule] = useState(initialRisk?.mcMaxSchedule || 0);
+  const [mcDistribution, setMcDistribution] = useState(initialRisk?.mcDistribution || 'Triangular');
+  const [includeInMonteCarlo, setIncludeInMonteCarlo] = useState(initialRisk?.includeInMonteCarlo !== false);
+
   useEffect(() => {
     Promise.all([
       apiFetch('http://localhost:3000/api/fields/risk').then(res => res.json()),
@@ -89,6 +99,26 @@ const RiskFormModal = ({ onClose, onRiskAdded, initialRisk, onRiskUpdated, readO
       return;
     }
 
+    // Monte Carlo validation
+    if (includeInMonteCarlo) {
+      if (Number(mcMinCost) > Number(mcMaxCost)) {
+        toast.error('Monte Carlo: Min Cost cannot exceed Max Cost.');
+        return;
+      }
+      if (Number(mcMinSchedule) > Number(mcMaxSchedule)) {
+        toast.error('Monte Carlo: Min Schedule cannot exceed Max Schedule.');
+        return;
+      }
+      if (Number(mcMostLikelyCost) < Number(mcMinCost) || Number(mcMostLikelyCost) > Number(mcMaxCost)) {
+        toast.error('Monte Carlo: Most Likely Cost must be between Min and Max.');
+        return;
+      }
+      if (Number(mcMostLikelySchedule) < Number(mcMinSchedule) || Number(mcMostLikelySchedule) > Number(mcMaxSchedule)) {
+        toast.error('Monte Carlo: Most Likely Schedule must be between Min and Max.');
+        return;
+      }
+    }
+
     setLoading(true);
 
     const finalLikelihood = itemType === 'Issue' ? 5 : likelihood;
@@ -99,6 +129,9 @@ const RiskFormModal = ({ onClose, onRiskAdded, initialRisk, onRiskUpdated, readO
       impactSchedule, impactPerformance, isSpof, spofDescription,
       likelihood: finalLikelihood, impact, resourceCostNeeded, resourceScheduleNeeded,
       planRealism,
+      mcMinCost: Number(mcMinCost), mcMostLikelyCost: Number(mcMostLikelyCost), mcMaxCost: Number(mcMaxCost),
+      mcMinSchedule: Number(mcMinSchedule), mcMostLikelySchedule: Number(mcMostLikelySchedule), mcMaxSchedule: Number(mcMaxSchedule),
+      mcDistribution, includeInMonteCarlo,
       discoveredDate, approvedDate, closedDate
     };
 
@@ -205,9 +238,10 @@ const RiskFormModal = ({ onClose, onRiskAdded, initialRisk, onRiskUpdated, readO
 
         {/* Tab Header */}
         <div style={{ display: 'flex', marginBottom: '1.5rem', borderRadius: '8px', overflow: 'hidden', flexShrink: 0, position: 'relative', zIndex: 10 }}>
-          <button type="button" onClick={() => setActiveTab('general')} style={{ ...tabStyle('general'), borderRight: 'none' }}>1. General</button>
+          <button type="button" onClick={() => setActiveTab('general')} style={{ ...tabStyle('general'), borderRadius: '6px 0 0 6px', borderRight: 'none' }}>1. General</button>
           <button type="button" onClick={() => setActiveTab('details')} style={{ ...tabStyle('details'), borderRight: 'none' }}>2. Details & Impact</button>
-          <button type="button" onClick={() => setActiveTab('resources')} style={tabStyle('resources')}>3. Resources</button>
+          <button type="button" onClick={() => setActiveTab('resources')} style={{ ...tabStyle('resources'), borderRight: 'none' }}>3. Resources</button>
+          <button type="button" onClick={() => setActiveTab('montecarlo')} style={{ ...tabStyle('montecarlo'), borderRadius: '0 6px 6px 0' }}>4. Monte Carlo</button>
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, overflowY: 'auto', paddingRight: '10px', minHeight: 0 }}>
@@ -246,7 +280,27 @@ const RiskFormModal = ({ onClose, onRiskAdded, initialRisk, onRiskUpdated, readO
                 {renderPicklist('handlingStrategy', handlingStrategy, setHandlingStrategy, "Select Strategy")}
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label className="form-label" style={{ marginBottom: '0.5rem' }}>Description (Risk/Issue/Opportunity)</label>
+              <div style={{ background: 'var(--surface)', color: 'var(--text)' }}>
+                <ReactQuill theme="snow" value={description} onChange={setDescription} />
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: itemType === 'Issue' ? '1fr' : '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+              {itemType !== 'Issue' && (
+                <div>
+                  <label className="form-label">Probability (1-5)</label>
+                  <input required type="number" min="1" max="5" className="form-input" value={likelihood} onChange={e => setLikelihood(Number(e.target.value))} />
+                </div>
+              )}
+              <div>
+                <label className="form-label">Consequence (1-5)</label>
+                <input required type="number" min="1" max="5" className="form-input" value={impact} onChange={e => setImpact(Number(e.target.value))} />
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
               <div>
                 <label className="form-label">GPOCs (comma separated)</label>
                 <input type="text" className="form-input" value={gpocs} onChange={e => setGpocs(e.target.value)} placeholder="e.g. John Doe, Jane Smith" />
@@ -274,12 +328,6 @@ const RiskFormModal = ({ onClose, onRiskAdded, initialRisk, onRiskUpdated, readO
 
           {/* TAB 2: DETAILS & IMPACT */}
           <div style={{ display: activeTab === 'details' ? 'flex' : 'none', flexDirection: 'column', gap: '1rem' }}>
-            <div style={{ marginBottom: '2rem' }}>
-              <label className="form-label" style={{ marginBottom: '0.5rem' }}>Description (Risk/Issue/Opportunity)</label>
-              <div style={{ background: 'var(--surface)', color: 'var(--text)' }}>
-                <ReactQuill theme="snow" value={description} onChange={setDescription} />
-              </div>
-            </div>
             <div style={{ marginBottom: '2rem' }}>
               <label className="form-label" style={{ marginBottom: '0.5rem' }}>General Impact Statement</label>
               <div style={{ background: 'var(--surface)', color: 'var(--text)' }}>
@@ -312,19 +360,6 @@ const RiskFormModal = ({ onClose, onRiskAdded, initialRisk, onRiskUpdated, readO
                   <input type="text" className="form-input" value={spofDescription} onChange={e => setSpofDescription(e.target.value)} />
                 </div>
               )}
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: itemType === 'Issue' ? '1fr' : '1fr 1fr', gap: '1rem' }}>
-              {itemType !== 'Issue' && (
-                <div>
-                  <label className="form-label">Probability (1-5)</label>
-                  <input required type="number" min="1" max="5" className="form-input" value={likelihood} onChange={e => setLikelihood(Number(e.target.value))} />
-                </div>
-              )}
-              <div>
-                <label className="form-label">Consequence (1-5)</label>
-                <input required type="number" min="1" max="5" className="form-input" value={impact} onChange={e => setImpact(Number(e.target.value))} />
-              </div>
             </div>
           </div>
 
@@ -367,6 +402,69 @@ const RiskFormModal = ({ onClose, onRiskAdded, initialRisk, onRiskUpdated, readO
                 </div>
               </div>
             )}
+          </div>
+
+          {/* TAB 4: MONTE CARLO */}
+          <div style={{ display: activeTab === 'montecarlo' ? 'flex' : 'none', flexDirection: 'column', gap: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+              <input 
+                type="checkbox" 
+                id="includeInMonteCarlo" 
+                checked={includeInMonteCarlo} 
+                onChange={e => setIncludeInMonteCarlo(e.target.checked)} 
+                style={{ width: '1.25rem', height: '1.25rem', cursor: 'pointer', accentColor: 'var(--primary)' }}
+              />
+              <label htmlFor="includeInMonteCarlo" style={{ margin: 0, fontWeight: 600, color: 'var(--text)', cursor: 'pointer' }}>
+                Include this item in Monte Carlo Analysis
+              </label>
+            </div>
+            
+            <div style={{ opacity: includeInMonteCarlo ? 1 : 0.5, pointerEvents: includeInMonteCarlo ? 'auto' : 'none', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              <div>
+                <label className="form-label">Simulation Distribution Type</label>
+              <select className="form-input" value={mcDistribution} onChange={e => setMcDistribution(e.target.value)}>
+                <option value="Triangular">Triangular (Standard)</option>
+                <option value="PERT">PERT (Weighted towards Most Likely)</option>
+                <option value="Uniform">Uniform (Equal probability across range)</option>
+              </select>
+            </div>
+            
+            <div style={{ background: 'rgba(15, 23, 42, 0.4)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
+              <h4 style={{ margin: '0 0 1rem 0', color: 'var(--primary)' }}>Cost Impact ($)</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+                <div>
+                  <label className="form-label">{itemType === 'Opportunity' ? 'Min Saved' : 'Min Cost'}</label>
+                  <input type="number" className="form-input" value={mcMinCost} onChange={e => setMcMinCost(e.target.value)} />
+                </div>
+                <div>
+                  <label className="form-label">Most Likely</label>
+                  <input type="number" className="form-input" value={mcMostLikelyCost} onChange={e => setMcMostLikelyCost(e.target.value)} />
+                </div>
+                <div>
+                  <label className="form-label">{itemType === 'Opportunity' ? 'Max Saved' : 'Max Cost'}</label>
+                  <input type="number" className="form-input" value={mcMaxCost} onChange={e => setMcMaxCost(e.target.value)} />
+                </div>
+              </div>
+            </div>
+
+            <div style={{ background: 'rgba(15, 23, 42, 0.4)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
+              <h4 style={{ margin: '0 0 1rem 0', color: 'var(--primary)' }}>Schedule Impact (Days {itemType === 'Opportunity' ? 'Saved' : 'Delay'})</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+                <div>
+                  <label className="form-label">{itemType === 'Opportunity' ? 'Min Saved' : 'Min Delay'}</label>
+                  <input type="number" className="form-input" value={mcMinSchedule} onChange={e => setMcMinSchedule(e.target.value)} />
+                </div>
+                <div>
+                  <label className="form-label">Most Likely</label>
+                  <input type="number" className="form-input" value={mcMostLikelySchedule} onChange={e => setMcMostLikelySchedule(e.target.value)} />
+                </div>
+                <div>
+                  <label className="form-label">{itemType === 'Opportunity' ? 'Max Saved' : 'Max Delay'}</label>
+                  <input type="number" className="form-input" value={mcMaxSchedule} onChange={e => setMcMaxSchedule(e.target.value)} />
+                </div>
+              </div>
+            </div>
+          </div>
           </div>
           </fieldset>
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>

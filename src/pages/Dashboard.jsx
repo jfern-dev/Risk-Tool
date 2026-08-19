@@ -208,25 +208,16 @@ const Dashboard = () => {
     URL.revokeObjectURL(url);
   };
 
-  const handleFileAction = async (action) => {
-    try {
-      if (action === 'new') await window.electron.ipcRenderer.invoke('api-new-file');
-      if (action === 'open') await window.electron.ipcRenderer.invoke('api-open-file');
-      if (action === 'save') {
-        const saved = await window.electron.ipcRenderer.invoke('api-save');
-        if (saved) toast.success('Workspace saved successfully');
-      }
-      if (action === 'save-as') {
-        const saved = await window.electron.ipcRenderer.invoke('api-save-as');
-        if (saved) toast.success('Workspace saved successfully');
-      }
+  useEffect(() => {
+    const handleAppAction = (e) => {
+      const action = e.detail;
       if (action === 'snapshot') setIsGlobalSnapshotModalOpen(true);
       if (action === 'csv') handleExportCSV();
       if (action === 'print') window.print();
-    } catch (err) {
-      toast.error('File operation failed');
-    }
-  };
+    };
+    window.addEventListener('app-action', handleAppAction);
+    return () => window.removeEventListener('app-action', handleAppAction);
+  }, [risks, snapshots, fields, selectedSnapshotId]);
 
   if (loading) return <div className="container" style={{ textAlign: 'center', padding: '4rem' }}>Loading ERM Data...</div>;
 
@@ -283,25 +274,7 @@ const Dashboard = () => {
           </select>
         </div>
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          <select
-            className="form-input"
-            style={{ padding: '0.5rem', width: 'auto', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)', cursor: 'pointer' }}
-            value=""
-            onChange={(e) => {
-              const action = e.target.value;
-              handleFileAction(action);
-              e.target.value = ''; // Reset selection
-            }}
-          >
-            <option value="" disabled>Data Actions...</option>
-            <option value="new">Create New Workspace</option>
-            <option value="open">Open Workspace...</option>
-            <option value="save">Save Workspace</option>
-            <option value="save-as">Save As...</option>
-            <option value="snapshot">Create Global Snapshot...</option>
-            <option value="csv">Export to CSV</option>
-            <option value="print">Export to PDF (Print)</option>
-          </select>
+
           <button className="btn" onClick={() => setIsModalOpen(true)}>
             <PlusCircle size={18} style={{ marginRight: '8px' }} />
             New RIO

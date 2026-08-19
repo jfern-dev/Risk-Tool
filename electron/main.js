@@ -8,39 +8,6 @@ import crypto from 'crypto';
 import os from 'os';
 import AdmZip from 'adm-zip';
 
-const ENCRYPTION_KEY = crypto.createHash('sha256').update('erm-tool-super-secret-key-2026!').digest();
-const IV_LENGTH = 16;
-
-function encryptData(text) {
-  const iv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv('aes-256-gcm', ENCRYPTION_KEY, iv);
-  let encrypted = cipher.update(text, 'utf8', 'hex');
-  encrypted += cipher.final('hex');
-  const authTag = cipher.getAuthTag().toString('hex');
-  return iv.toString('hex') + ':' + authTag + ':' + encrypted;
-}
-
-function decryptData(text) {
-  try {
-
-    const parts = text.split(':');
-    if (parts.length === 3) {
-      const iv = Buffer.from(parts[0], 'hex');
-      const authTag = Buffer.from(parts[1], 'hex');
-      const encryptedText = Buffer.from(parts[2], 'hex');
-      const decipher = crypto.createDecipheriv('aes-256-gcm', ENCRYPTION_KEY, iv);
-      decipher.setAuthTag(authTag);
-      let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
-      decrypted += decipher.final('utf8');
-      return decrypted;
-    }
-  } catch (e) {
-    // Fallback if decryption fails
-  }
-  // Fallback for plain unencrypted JSON files (backwards compatibility)
-  return text;
-}
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -162,13 +129,13 @@ const handleOpenFile = async () => {
         dataStr = await fs.readFile(filePath, 'utf-8');
       }
       
-      const decryptedStr = decryptData(dataStr);
-      const parsed = JSON.parse(decryptedStr);
+      const parsed = JSON.parse(dataStr);
       appData = {
         risks: parsed.risks || [],
         fields: parsed.fields || [],
         snapshots: parsed.snapshots || [],
-        dashboardSettings: parsed.dashboardSettings || { hiddenFields: [] }
+        dashboardSettings: parsed.dashboardSettings || { hiddenFields: [] },
+        simulationCache: parsed.simulationCache || null
       };
       if (!appData.dashboardSettings.picklists) {
         appData.dashboardSettings.picklists = {
@@ -195,6 +162,7 @@ const handleNewFile = async () => {
     risks: [], 
     fields: [], 
     snapshots: [],
+    simulationCache: null,
     dashboardSettings: { 
       hiddenFields: [],
       picklists: {
@@ -427,14 +395,37 @@ ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => 
           handlingStrategy: { options: ['Accept', 'Decline', 'Transfer', 'Mitigate/Execute'], isMultiSelect: false }
         };
       }
+      if (!appData.dashboardSettings.probabilityMapping) {
+        appData.dashboardSettings.probabilityMapping = { 
+          1: { min: 1, max: 20 }, 
+          2: { min: 21, max: 40 }, 
+          3: { min: 41, max: 60 }, 
+          4: { min: 61, max: 80 }, 
+          5: { min: 81, max: 99 } 
+        };
+      }
       return appData.dashboardSettings;
     }
     
     // PUT /api/dashboardSettings
     if (reqPath === '/api/dashboardSettings' && method === 'PUT') {
-      appData.dashboardSettings = body;
+      appData.dashboardSettings = { ...appData.dashboardSettings, ...body };
       await autoSaveToTemp();
       return appData.dashboardSettings;
+    }
+
+    // GET /api/simulationCache
+    if (reqPath === '/api/simulationCache' && method === 'GET') {
+      console.log('GET /api/simulationCache returning:', !!appData.simulationCache);
+      return appData.simulationCache || null;
+    }
+
+    // PUT /api/simulationCache
+    if (reqPath === '/api/simulationCache' && method === 'PUT') {
+      console.log('PUT /api/simulationCache saving body keys:', Object.keys(body));
+      appData.simulationCache = body;
+      await autoSaveToTemp();
+      return appData.simulationCache;
     }
 
     // GET /api/snapshots
@@ -540,7 +531,6 @@ ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => 
       const riskId = parseInt(match[1]);
       const risk = appData.risks.find(r => r.id === riskId);
       if (!risk) throw new Error('Risk not found');
-      if (!risk.customFields) risk.customFields = [];
 
       // Auto-save snapshot before update
       if (!risk.snapshots) risk.snapshots = [];
@@ -548,15 +538,31 @@ ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => 
       delete riskCopy.snapshots;
       risk.snapshots.push({
         id: generateId(risk.snapshots),
-        note: 'Auto-saved before custom field addition',
+        note: 'Auto-saved before custom field update',
         date: new Date().toISOString(),
         data: riskCopy
       });
 
-      const newCf = { id: generateId(risk.customFields), riskId, ...body };
-      risk.customFields.push(newCf);
+      // Replace custom fields array directly instead of appending
+      risk.customFields = (body.fields || []).map((f, i) => ({
+        id: i + 1,
+        riskId,
+        name: f.name,
+        value: f.value
+      }));
       await autoSaveToTemp();
-      return newCf;
+      return { customFields: risk.customFields };
+    }
+
+    // DELETE /api/risks/:id
+    match = reqPath.match(/^\/api\/risks\/(\d+)$/);
+    if (match && method === 'DELETE') {
+      const id = parseInt(match[1]);
+      const idx = appData.risks.findIndex(r => r.id === id);
+      if (idx === -1) throw new Error('Risk not found');
+      appData.risks.splice(idx, 1);
+      await autoSaveToTemp();
+      return { success: true };
     }
 
     // GET /api/fields
