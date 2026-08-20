@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom';
-import { Toaster } from 'react-hot-toast';
+import { Toaster, toast } from 'react-hot-toast';
 import Dashboard from './pages/Dashboard';
 import RiskTable from './pages/RiskTable';
 import AdminPage from './pages/AdminPage';
 import MonteCarloAnalysis from './pages/MonteCarloAnalysis';
+import ScheduleView from './pages/ScheduleView';
 import ErrorBoundary from './components/ErrorBoundary';
 import './index.css';
 
@@ -31,6 +32,13 @@ function AppContent({ fileKey }) {
       if (action === 'save-as') {
         const saved = await window.electron.ipcRenderer.invoke('api-save-as');
         if (saved) toast.success('Workspace saved successfully');
+      }
+      if (action === 'import-mpp') {
+        const schedule = await window.electron.ipcRenderer.invoke('api-import-mpp');
+        if (schedule) {
+          toast.success('MS Project schedule imported successfully');
+          navigate('/schedule');
+        }
       }
     } catch (err) {
       toast.error('File operation failed');
@@ -62,6 +70,9 @@ function AppContent({ fileKey }) {
               <option value="open">Open Workspace...</option>
               <option value="save">Workspace Save</option>
               <option value="save-as">Workspace Save As...</option>
+              <option disabled>---</option>
+              <option value="import-mpp">Import MS Project (.mpp)</option>
+              <option disabled>---</option>
               <option value="snapshot">Create Global Snapshot...</option>
               <option value="csv">Export to CSV</option>
               <option value="print">Export to PDF (Print)</option>
@@ -70,6 +81,7 @@ function AppContent({ fileKey }) {
           <nav style={{ display: 'flex', gap: '1.5rem' }}>
             <Link to="/" style={{ color: 'var(--text)', textDecoration: 'none', fontWeight: 500 }}>Dashboard</Link>
             <Link to="/table" style={{ color: 'var(--text)', textDecoration: 'none', fontWeight: 500 }}>Data Table</Link>
+            <Link to="/schedule" style={{ color: 'var(--text)', textDecoration: 'none', fontWeight: 500 }}>Schedule</Link>
             <Link to="/montecarlo" style={{ color: 'var(--text)', textDecoration: 'none', fontWeight: 500 }}>Monte Carlo</Link>
             <Link to="/admin" style={{ color: 'var(--text)', textDecoration: 'none', fontWeight: 500 }}>Admin</Link>
           </nav>
@@ -79,6 +91,7 @@ function AppContent({ fileKey }) {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/table" element={<RiskTable />} />
+          <Route path="/schedule" element={<ScheduleView />} />
           <Route path="/montecarlo" element={<MonteCarloAnalysis />} />
           <Route path="/admin" element={<AdminPage />} />
         </Routes>

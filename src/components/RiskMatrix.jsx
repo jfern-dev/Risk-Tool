@@ -29,7 +29,7 @@ export const getIssueScoreClass = (impact) => {
   return 'score-extreme';
 };
 
-const RiskMatrix = ({ risks, activeType = 'Risk', hideIds = false, isPrint = false }) => {
+const RiskMatrix = ({ risks, activeType = 'Risk', hideIds = false, showCounts = false, isPrint = false }) => {
   
   if (activeType === 'Issue') {
     const cells = [];
@@ -43,13 +43,19 @@ const RiskMatrix = ({ risks, activeType = 'Risk', hideIds = false, isPrint = fal
           style={{ padding: '4px', overflowY: 'auto' }}
         >
           {cellRisks.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', justifyContent: 'center' }}>
-              {cellRisks.map(r => (
-                <span key={r.id} style={{ fontSize: '0.75rem', background: 'rgba(0,0,0,0.3)', padding: '2px 4px', borderRadius: '4px', whiteSpace: 'nowrap' }}>
-                  {hideIds ? 'X' : r.userRiskId}
-                </span>
-              ))}
-            </div>
+            showCounts ? (
+              <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', fontSize: '1.25rem', fontWeight: 'bold' }}>
+                {cellRisks.length}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', justifyContent: 'center' }}>
+                {cellRisks.map(r => (
+                  <span key={r.id} style={{ fontSize: '0.75rem', background: 'rgba(0,0,0,0.3)', padding: '2px 4px', borderRadius: '4px', whiteSpace: 'nowrap' }}>
+                    {hideIds ? 'X' : r.userRiskId}
+                  </span>
+                ))}
+              </div>
+            )
           )}
         </div>
       );

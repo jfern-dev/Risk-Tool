@@ -1,96 +1,7 @@
 // src/workers/monteCarloWorker.js
 
-// Generates a random number from a Triangular distribution
-function randomTriangular(min, likely, max) {
-  min = Number(min) || 0;
-  likely = Number(likely) || 0;
-  max = Number(max) || 0;
-  if (min === max) return min;
+import { randomTriangular, randomUniform, randomPERT } from '../utils/mcEngine';
 
-  const U = Math.random();
-  const F = (likely - min) / (max - min);
-
-  if (U <= F) {
-    return min + Math.sqrt(U * (max - min) * (likely - min));
-  } else {
-    return max - Math.sqrt((1 - U) * (max - min) * (max - likely));
-  }
-}
-
-// Generates a random number from a Uniform distribution
-function randomUniform(min, max) {
-  return Number(min) + Math.random() * (Number(max) - Number(min));
-}
-
-// Generates a random number from a PERT-Beta distribution
-function randomPERT(min, likely, max, lambda = 4) {
-  min = Number(min) || 0;
-  likely = Number(likely) || 0;
-  max = Number(max) || 0;
-  if (min === max) return min;
-  if (min > max) { const t = min; min = max; max = t; }
-  if (likely < min) likely = min;
-  if (likely > max) likely = max;
-
-  const range = max - min;
-  const mu = (min + lambda * likely + max) / (lambda + 2);
-
-  // Derive alpha and beta for the Beta distribution
-  let alpha, beta;
-  if (likely === mu) {
-    // Symmetric case
-    alpha = (lambda / 2) + 1;
-    beta = alpha;
-  } else {
-    alpha = ((mu - min) * (2 * likely - min - max)) / ((likely - mu) * range);
-    beta = alpha * (max - mu) / (mu - min);
-  }
-
-  // Clamp to reasonable values for stability
-  if (alpha <= 0 || !isFinite(alpha)) alpha = 1;
-  if (beta <= 0 || !isFinite(beta)) beta = 1;
-
-  // Generate Beta(alpha, beta) using Jöhnk's algorithm for small params,
-  // or the gamma method for larger ones
-  const sample = sampleBeta(alpha, beta);
-  return min + sample * range;
-}
-
-// Sample from Beta(a, b) using ratio of gamma variates
-function sampleBeta(a, b) {
-  const x = sampleGamma(a);
-  const y = sampleGamma(b);
-  if (x + y === 0) return 0.5;
-  return x / (x + y);
-}
-
-// Sample from Gamma(shape) using Marsaglia and Tsang's method
-function sampleGamma(shape) {
-  if (shape < 1) {
-    // Boost: Gamma(shape) = Gamma(shape+1) * U^(1/shape)
-    return sampleGamma(shape + 1) * Math.pow(Math.random(), 1 / shape);
-  }
-  const d = shape - 1 / 3;
-  const c = 1 / Math.sqrt(9 * d);
-  while (true) {
-    let x, v;
-    do {
-      x = randn();
-      v = 1 + c * x;
-    } while (v <= 0);
-    v = v * v * v;
-    const u = Math.random();
-    if (u < 1 - 0.0331 * (x * x) * (x * x)) return d * v;
-    if (Math.log(u) < 0.5 * x * x + d * (1 - v + Math.log(v))) return d * v;
-  }
-}
-
-// Standard normal via Box-Muller
-function randn() {
-  const u = Math.random();
-  const v = Math.random();
-  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
-}
 
 self.onmessage = function (e) {
   const { risks, probabilityMapping, iterations = 10000 } = e.data;
@@ -133,12 +44,15 @@ self.onmessage = function (e) {
           sampledSchedule = randomTriangular(risk.mcMinSchedule || 0, risk.mcMostLikelySchedule || 0, risk.mcMaxSchedule || 0);
         }
 
+        const hasCost = Array.isArray(risk.riskCategory) ? risk.riskCategory.includes('Cost') : risk.riskCategory === 'Cost';
+        const hasSchedule = Array.isArray(risk.riskCategory) ? risk.riskCategory.includes('Schedule') : risk.riskCategory === 'Schedule';
+
         if (risk.itemType === 'Opportunity') {
-          iterCost -= sampledCost;
-          iterSchedule -= sampledSchedule;
+          if (hasCost) iterCost -= sampledCost;
+          if (hasSchedule) iterSchedule -= sampledSchedule;
         } else {
-          iterCost += sampledCost;
-          iterSchedule += sampledSchedule;
+          if (hasCost) iterCost += sampledCost;
+          if (hasSchedule) iterSchedule += sampledSchedule;
         }
       }
     }

@@ -154,6 +154,11 @@ h1, h2, h3 {
   transform: none !important;
 }
 
+.modal-large {
+  max-width: 95vw;
+  width: 95%;
+}
+
 .form-label {
   display: block;
   font-size: 0.875rem;
@@ -240,6 +245,7 @@ h1, h2, h3 {
   button,
   .modal-overlay,
   select,
+  .no-print,
   .app-content > .container {
     display: none !important;
   }

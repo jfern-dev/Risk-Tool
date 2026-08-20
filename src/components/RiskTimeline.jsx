@@ -38,7 +38,14 @@ const RiskTimeline = ({ risk, isPrint = false }) => {
     step: s
   }));
 
-  const allEvents = [...targetEvents, ...actualEvents].sort((a, b) => a.date - b.date);
+  const today = new Date().getTime();
+  const allEvents = [...targetEvents, ...actualEvents, {
+    date: today,
+    isTarget: false,
+    isActual: false,
+    isTodayMarker: true,
+    step: { description: 'Today' }
+  }].sort((a, b) => a.date - b.date);
   
   const points = [];
   
@@ -66,23 +73,15 @@ const RiskTimeline = ({ risk, isPrint = false }) => {
     points.push({
       date: event.date,
       targetScore: currentTargetL * currentTargetI,
-      actualScore: event.date > Date.now() ? null : currentActualL * currentActualI,
+      actualScore: event.date > today ? null : currentActualL * currentActualI,
       label: event.step.description,
-      isTargetEvent: event.isTarget,
-      isActualEvent: event.isActual,
+      isTargetEvent: event.isTarget || false,
+      isActualEvent: event.isActual || false,
+      isTodayMarker: event.isTodayMarker || false,
     });
   });
 
-  // Add a final point for "Today" so the actual line extends to the present if no recent steps
-  const today = new Date().getTime();
-  if (points.length > 0 && points[points.length - 1].date < today) {
-    points.push({
-      date: today,
-      targetScore: currentTargetL * currentTargetI,
-      actualScore: currentActualL * currentActualI,
-      label: 'Today',
-    });
-  }
+  // Today marker is now injected chronologically above
 
   const formatXAxis = (tickItem) => {
     return new Date(tickItem).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' });
@@ -138,7 +137,7 @@ const RiskTimeline = ({ risk, isPrint = false }) => {
       />
       <Line 
         name="Actual Risk Score"
-        type="monotone" 
+        type="stepAfter" 
         dataKey="actualScore" 
         stroke="var(--primary)" 
         strokeWidth={3}

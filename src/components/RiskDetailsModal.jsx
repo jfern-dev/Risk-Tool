@@ -24,7 +24,7 @@ const RiskDetailsModal = ({ risk, onClose, onActionClick }) => {
   
   return (
     <div className="modal-overlay" style={{ zIndex: 1000, background: 'rgba(0,0,0,0.6)', padding: '1rem' }}>
-      <div className="modal-content card" style={{ maxWidth: '1000px', width: '100%', maxHeight: '95vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      <div className="modal-content modal-large card" style={{ maxHeight: '95vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border)', paddingBottom: '1rem' }}>
@@ -155,14 +155,41 @@ const RiskDetailsModal = ({ risk, onClose, onActionClick }) => {
 
         </div>
 
-        {/* Bottom Section: Burndown Plot */}
-        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem', marginTop: '0.5rem' }}>
-          <RiskTimeline risk={risk} />
-          {(!risk.burndownSteps || risk.burndownSteps.length === 0) && (
-            <div style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)', fontSize: '0.9rem', border: '1px dashed var(--border)', borderRadius: '8px', marginTop: '1rem' }}>
-              No action plan established for this item yet. Add steps in the Action Plan to see the burndown timeline.
-            </div>
-          )}
+        {/* Bottom Section: Burndown Plot & Action List */}
+        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem', marginTop: '0.5rem', display: 'grid', gridTemplateColumns: '65% 35%', gap: '2rem' }}>
+          <div>
+            <RiskTimeline risk={risk} />
+            {(!risk.burndownSteps || risk.burndownSteps.length === 0) && (
+              <div style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)', fontSize: '0.9rem', border: '1px dashed var(--border)', borderRadius: '8px', marginTop: '1rem' }}>
+                No action plan established for this item yet. Add steps in the Action Plan to see the burndown timeline.
+              </div>
+            )}
+          </div>
+          <div style={{ overflowY: 'auto', maxHeight: '250px', background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
+            <h5 style={{ margin: '0 0 0.5rem 0', color: 'var(--text-muted)', fontSize: '0.9rem' }}>Action List</h5>
+            {risk.burndownSteps && risk.burndownSteps.length > 0 ? (
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border)', textAlign: 'left', color: 'var(--text-muted)' }}>
+                    <th style={{ padding: '6px 0', width: '65%' }}>Action</th>
+                    <th style={{ padding: '6px 0', width: '35%' }}>Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...risk.burndownSteps].sort((a, b) => new Date(a.targetDate).getTime() - new Date(b.targetDate).getTime()).map(step => (
+                    <tr key={step.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '6px 0', paddingRight: '10px' }}>{step.description}</td>
+                      <td style={{ padding: '6px 0', color: step.isCompleted ? 'var(--success)' : 'inherit', fontWeight: step.isCompleted ? 'bold' : 'normal' }}>
+                        {step.isCompleted ? 'Complete' : (step.targetDate ? new Date(step.targetDate).toLocaleDateString() : 'N/A')}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontStyle: 'italic' }}>No actions established.</div>
+            )}
+          </div>
         </div>
 
         {/* Footer: Action Buttons */}
@@ -178,6 +205,11 @@ const RiskDetailsModal = ({ risk, onClose, onActionClick }) => {
           </button>
           <button className="btn" style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)' }} onClick={() => onActionClick('statusLog', risk)}>
             <Clock size={16} style={{ marginRight: '6px' }} /> Status Logs ({risk.statusLogs?.length || 0})
+          </button>
+          <button className="btn" style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)' }} onClick={() => {
+            window.dispatchEvent(new CustomEvent('print-single-risk', { detail: risk.id }));
+          }}>
+            <FileText size={16} style={{ marginRight: '6px' }} /> Print to PDF
           </button>
           <button className="btn" style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)' }} onClick={() => onActionClick('attachments', risk)}>
             <FileText size={16} style={{ marginRight: '6px' }} /> Attachments ({risk.attachments?.length || 0})

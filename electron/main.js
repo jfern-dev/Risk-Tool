@@ -7,6 +7,10 @@ import fs from 'fs/promises';
 import crypto from 'crypto';
 import os from 'os';
 import AdmZip from 'adm-zip';
+import { execFile } from 'child_process';
+import util from 'util';
+
+const execFileAsync = util.promisify(execFile);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,7 +30,9 @@ let appData = {
       riskCategory: { options: ['Schedule', 'Cost', 'Technical'], isMultiSelect: true },
       handlingStrategy: { options: ['Accept', 'Decline', 'Transfer', 'Mitigate/Execute'], isMultiSelect: false }
     }
-  }
+  },
+  schedule: { tasks: [], dependencies: [] },
+  mapping: []
 };
 
 // Generate an ID
@@ -54,8 +60,16 @@ app.on('will-quit', () => cleanupWorkDir());
 
 const autoSaveToTemp = async () => {
   try {
-    const jsonStr = JSON.stringify(appData, null, 2);
-    await fs.writeFile(path.join(workDir, 'data.json'), jsonStr, 'utf-8');
+    const riskData = {
+      risks: appData.risks,
+      fields: appData.fields,
+      snapshots: appData.snapshots,
+      dashboardSettings: appData.dashboardSettings,
+      simulationCache: appData.simulationCache
+    };
+    await fs.writeFile(path.join(workDir, 'data.json'), JSON.stringify(riskData, null, 2), 'utf-8');
+    await fs.writeFile(path.join(workDir, 'schedule.json'), JSON.stringify(appData.schedule || { tasks: [], dependencies: [] }, null, 2), 'utf-8');
+    await fs.writeFile(path.join(workDir, 'mapping.json'), JSON.stringify(appData.mapping || [], null, 2), 'utf-8');
   } catch (error) {
     console.error('Error auto-saving to temp:', error);
   }
@@ -123,8 +137,13 @@ const handleOpenFile = async () => {
       }
       
       let dataStr;
+      let scheduleStr = '{"tasks":[],"dependencies":[]}';
+      let mappingStr = '[]';
+
       if (isZip) {
         dataStr = await fs.readFile(path.join(workDir, 'data.json'), 'utf-8');
+        try { scheduleStr = await fs.readFile(path.join(workDir, 'schedule.json'), 'utf-8'); } catch (e) {}
+        try { mappingStr = await fs.readFile(path.join(workDir, 'mapping.json'), 'utf-8'); } catch (e) {}
       } else {
         dataStr = await fs.readFile(filePath, 'utf-8');
       }
@@ -135,7 +154,9 @@ const handleOpenFile = async () => {
         fields: parsed.fields || [],
         snapshots: parsed.snapshots || [],
         dashboardSettings: parsed.dashboardSettings || { hiddenFields: [] },
-        simulationCache: parsed.simulationCache || null
+        simulationCache: parsed.simulationCache || null,
+        schedule: JSON.parse(scheduleStr),
+        mapping: JSON.parse(mappingStr)
       };
       if (!appData.dashboardSettings.picklists) {
         appData.dashboardSettings.picklists = {
@@ -170,7 +191,9 @@ const handleNewFile = async () => {
         riskCategory: { options: ['Schedule', 'Cost', 'Technical'], isMultiSelect: true },
         handlingStrategy: { options: ['Accept', 'Decline', 'Transfer', 'Mitigate/Execute'], isMultiSelect: false }
       }
-    }
+    },
+    schedule: { tasks: [], dependencies: [] },
+    mapping: []
   };
   currentFilePath = null;
   await initWorkDir();
@@ -365,6 +388,68 @@ ipcMain.handle('api-delete-attachment', async (event, riskId, attachmentId) => {
   return { success: true };
 });
 
+ipcMain.handle('api-import-mpp', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Import MS Project File',
+    filters: [
+      { name: 'Microsoft Project', extensions: ['mpp'] },
+      { name: 'All Files', extensions: ['*'] }
+    ],
+    properties: ['openFile']
+  });
+  
+  if (result.canceled || result.filePaths.length === 0) return null;
+  const filePath = result.filePaths[0];
+  
+  const scriptsDir = path.join(__dirname, '..', 'scripts');
+  
+  try {
+    const brewJava = '/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home/bin/java';
+    // Fallback to global 'java' if brew java doesn't exist
+    let javaExec = 'java';
+    try {
+      await fs.stat(brewJava);
+      javaExec = brewJava;
+    } catch (e) {
+      // Ignored, fallback to 'java'
+    }
+    
+    // Classpath must include the lib folder jars and the scripts dir
+    const classPath = path.join(scriptsDir, 'lib', '*') + path.delimiter + scriptsDir;
+    
+    const { stdout } = await execFileAsync(javaExec, ['-cp', classPath, 'ParseMPP', filePath], { maxBuffer: 1024 * 1024 * 50 }); // 50MB buffer
+    const jsonStartIndex = stdout.indexOf('{');
+    if (jsonStartIndex === -1) {
+      throw new Error("No JSON found in java output: " + stdout);
+    }
+    const jsonStr = stdout.substring(jsonStartIndex);
+    const parsedData = JSON.parse(jsonStr);
+    
+    if (parsedData.error) {
+      throw new Error(parsedData.error);
+    }
+    
+    appData.schedule = parsedData;
+    await autoSaveToTemp();
+    
+    return appData.schedule;
+  } catch (error) {
+    console.error('MPP Parse Error:', error);
+    let errorMsg = error.message;
+    if (error.stdout && error.stdout.includes('{')) {
+      try {
+        const jsonStr = error.stdout.substring(error.stdout.indexOf('{'));
+        const parsed = JSON.parse(jsonStr);
+        if (parsed.error) errorMsg = parsed.error;
+      } catch (e) {
+        // ignore
+      }
+    }
+    dialog.showErrorBox('Import Error', `Could not parse .mpp file: ${errorMsg}`);
+    throw error;
+  }
+});
+
 ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => {
   try {
     const formatRiskId = (id, type) => {
@@ -412,6 +497,30 @@ ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => 
       appData.dashboardSettings = { ...appData.dashboardSettings, ...body };
       await autoSaveToTemp();
       return appData.dashboardSettings;
+    }
+
+    // GET /api/schedule
+    if (reqPath === '/api/schedule' && method === 'GET') {
+      return appData.schedule || { tasks: [], dependencies: [] };
+    }
+
+    // PUT /api/schedule
+    if (reqPath === '/api/schedule' && method === 'PUT') {
+      appData.schedule = body;
+      await autoSaveToTemp();
+      return appData.schedule;
+    }
+
+    // GET /api/mapping
+    if (reqPath === '/api/mapping' && method === 'GET') {
+      return appData.mapping || [];
+    }
+
+    // PUT /api/mapping
+    if (reqPath === '/api/mapping' && method === 'PUT') {
+      appData.mapping = body;
+      await autoSaveToTemp();
+      return appData.mapping;
     }
 
     // GET /api/simulationCache

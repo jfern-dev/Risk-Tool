@@ -31,6 +31,31 @@ const Dashboard = () => {
   const [activeHistoryRisk, setActiveHistoryRisk] = useState(null);
   const [isGlobalSnapshotModalOpen, setIsGlobalSnapshotModalOpen] = useState(false);
   const [activeRiskDetails, setActiveRiskDetails] = useState(null);
+  
+  const [isPrinting, setIsPrinting] = useState(false);
+  const [singlePrintRiskId, setSinglePrintRiskId] = useState(null);
+
+  useEffect(() => {
+    const handleBeforePrint = () => setIsPrinting(true);
+    const handleAfterPrint = () => {
+      setIsPrinting(false);
+      setSinglePrintRiskId(null);
+    };
+    window.addEventListener('beforeprint', handleBeforePrint);
+    window.addEventListener('afterprint', handleAfterPrint);
+    
+    const handlePrintSingle = (e) => {
+      setSinglePrintRiskId(e.detail);
+      setTimeout(() => window.print(), 100);
+    };
+    window.addEventListener('print-single-risk', handlePrintSingle);
+    
+    return () => {
+      window.removeEventListener('beforeprint', handleBeforePrint);
+      window.removeEventListener('afterprint', handleAfterPrint);
+      window.removeEventListener('print-single-risk', handlePrintSingle);
+    };
+  }, []);
 
   const loadData = async () => {
     try {
@@ -234,8 +259,9 @@ const Dashboard = () => {
   const comparisonSnapshot = snapshots.length > 0 ? snapshots[snapshots.length - 1] : null;
 
   return (
-    <div className="container">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+    <>
+      <div className="container no-print">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <h2 style={{ margin: 0 }}>Dashboard</h2>
           <select 
@@ -346,7 +372,7 @@ const Dashboard = () => {
                       <span style={{ fontSize: '0.8rem', padding: '2px 8px', background: 'var(--primary)', color: 'white', borderRadius: '4px', flexShrink: 0 }}>
                         {risk.userRiskId}
                       </span>
-                      <span style={{ fontWeight: 600, fontSize: '1rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <span style={{ fontWeight: 600, fontSize: '1rem', whiteSpace: isPrinting ? 'nowrap' : 'normal', overflowWrap: 'break-word', wordWrap: 'break-word', overflow: isPrinting ? 'hidden' : 'visible', textOverflow: isPrinting ? 'ellipsis' : 'clip', maxWidth: isPrinting ? '350px' : 'none', display: isPrinting ? 'inline-block' : 'inline', verticalAlign: 'middle' }}>
                         {risk.title}
                       </span>
                       {risk.level === 'Program' ? (
@@ -373,7 +399,7 @@ const Dashboard = () => {
 
         {/* Right Column: Matrix */}
         <div style={{ width: '480px', flexShrink: 0, position: 'sticky', top: '2rem' }}>
-          <RiskMatrix risks={displayRisks} activeType={activeItemType} />
+          <RiskMatrix risks={displayRisks} activeType={activeItemType} showCounts={isPrinting} />
         </div>
         </div>
       )}
@@ -482,11 +508,22 @@ const Dashboard = () => {
         />
       )}
 
-      {/* Hidden during normal use, visible only when printing */}
-      <PdfReport 
-        risks={displayRisks} 
-      />
-    </div>
+      </div>
+
+      {/* Hidden during normal use, visible only when printing a single risk */}
+      {singlePrintRiskId && (
+        <PdfReport 
+          risks={displayRisks.filter(r => r.id === singlePrintRiskId)} 
+        />
+      )}
+
+      {/* Hidden during normal use, visible only when printing the global report */}
+      {!singlePrintRiskId && (
+        <PdfReport 
+          risks={displayRisks} 
+        />
+      )}
+    </>
   );
 };
 

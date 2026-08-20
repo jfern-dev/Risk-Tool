@@ -228,7 +228,7 @@ const RiskFormModal = ({ onClose, onRiskAdded, initialRisk, onRiskUpdated, readO
 
   return (
     <div className="modal-overlay">
-      <div className="modal-content card" style={{ maxWidth: '800px', width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+      <div className="modal-content modal-large card" style={{ maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexShrink: 0 }}>
           {customHeader ? customHeader : <h2 style={{ margin: 0 }}>{initialRisk ? (readOnly ? 'View' : 'Edit') : 'Add New'} R/I/O</h2>}
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>

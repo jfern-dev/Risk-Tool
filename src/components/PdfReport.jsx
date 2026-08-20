@@ -30,11 +30,11 @@ const PdfReport = ({ risks }) => {
             {/* Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #ccc', paddingBottom: '8px', marginBottom: '15px' }}>
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '5px' }}>
-                  <span style={{ fontSize: '0.9rem', padding: '4px 10px', background: '#3b82f6', color: 'white', borderRadius: '6px', fontWeight: 'bold' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '5px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '0.9rem', padding: '4px 10px', background: '#3b82f6', color: 'white', borderRadius: '6px', fontWeight: 'bold', flexShrink: 0 }}>
                     {risk.userRiskId}
                   </span>
-                  <h2 style={{ margin: 0, fontSize: '1.4rem', color: 'black' }}>{risk.title}</h2>
+                  <h2 style={{ margin: 0, fontSize: '1.4rem', color: 'black', maxWidth: '85%', wordWrap: 'break-word', overflowWrap: 'break-word', whiteSpace: 'normal' }}>{risk.title}</h2>
                 </div>
                 <span style={{ color: '#555', fontSize: '0.9rem' }}>{currentItemType} | Level: {risk.level || 'N/A'}</span>
               </div>
@@ -116,14 +116,41 @@ const PdfReport = ({ risks }) => {
               </div>
             </div>
 
-            {/* Bottom Section: Burndown Plot */}
-            <div style={{ borderTop: '1px solid #ccc', paddingTop: '15px', marginTop: '15px' }}>
-              <RiskTimeline risk={risk} isPrint={true} />
-              {(!risk.burndownSteps || risk.burndownSteps.length === 0) && (
-                <div style={{ textAlign: 'center', padding: '1rem', color: '#888', fontSize: '0.9rem', border: '1px dashed #ccc', borderRadius: '8px', marginTop: '10px' }}>
-                  No action plan established for this item yet.
-                </div>
-              )}
+            {/* Bottom Section: Burndown Plot & Action List */}
+            <div style={{ borderTop: '1px solid #ccc', paddingTop: '15px', marginTop: '15px', display: 'grid', gridTemplateColumns: '65% 35%', gap: '20px' }}>
+              <div>
+                <RiskTimeline risk={risk} isPrint={true} />
+                {(!risk.burndownSteps || risk.burndownSteps.length === 0) && (
+                  <div style={{ textAlign: 'center', padding: '1rem', color: '#888', fontSize: '0.9rem', border: '1px dashed #ccc', borderRadius: '8px', marginTop: '10px' }}>
+                    No action plan established for this item yet.
+                  </div>
+                )}
+              </div>
+              <div style={{ overflowY: 'auto', maxHeight: '250px' }}>
+                <h5 style={{ margin: '0 0 0.5rem 0', color: '#666', fontSize: '0.9rem' }}>Action List</h5>
+                {risk.burndownSteps && risk.burndownSteps.length > 0 ? (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', color: 'black' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid #ccc', textAlign: 'left' }}>
+                        <th style={{ padding: '4px 0', width: '65%' }}>Action</th>
+                        <th style={{ padding: '4px 0', width: '35%' }}>Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...risk.burndownSteps].sort((a, b) => new Date(a.targetDate).getTime() - new Date(b.targetDate).getTime()).map(step => (
+                        <tr key={step.id} style={{ borderBottom: '1px solid #eee' }}>
+                          <td style={{ padding: '4px 0', paddingRight: '10px' }}>{step.description}</td>
+                          <td style={{ padding: '4px 0', color: step.isCompleted ? '#10B981' : 'inherit', fontWeight: step.isCompleted ? 'bold' : 'normal' }}>
+                            {step.isCompleted ? 'Complete' : (step.targetDate ? new Date(step.targetDate).toLocaleDateString() : 'N/A')}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div style={{ color: '#888', fontSize: '0.85rem', fontStyle: 'italic' }}>No actions established.</div>
+                )}
+              </div>
             </div>
           </div>
         );

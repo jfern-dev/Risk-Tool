@@ -1,6 +1,10 @@
 export const apiFetch = async (url, options = {}) => {
   const { method = 'GET', body } = options;
-  let parsedBody = body ? JSON.parse(body) : undefined;
+  let parsedBody;
+  if (body) {
+    try { parsedBody = typeof body === 'string' ? JSON.parse(body) : body; }
+    catch (e) { parsedBody = body; }
+  }
   
   const path = url.replace('http://localhost:3000', '');
   
