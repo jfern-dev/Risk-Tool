@@ -1,7 +1,7 @@
 {
   "name": "risk-tool",
   "private": true,
-  "version": "6.1.0",
+  "version": "6.1.1",
   "repository": "https://github.com/jfern-dev/Risk-Tool",
   "main": "electron/main.js",
   "type": "module",
@@ -52,6 +52,9 @@
       "electron/**/*",
       "scripts/**/*",
       "package.json"
+    ],
+    "asarUnpack": [
+      "scripts/**/*"
     ],
     "publish": [
       {

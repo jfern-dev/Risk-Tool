@@ -401,7 +401,8 @@ ipcMain.handle('api-import-mpp', async () => {
   if (result.canceled || result.filePaths.length === 0) return null;
   const filePath = result.filePaths[0];
   
-  const scriptsDir = path.join(__dirname, '..', 'scripts');
+  // When packaged, scripts/ is in app.asar.unpacked so the external Java process can read it
+  const scriptsDir = path.join(__dirname, '..', 'scripts').replace('app.asar', 'app.asar.unpacked');
   
   try {
     const brewJava = '/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home/bin/java';
