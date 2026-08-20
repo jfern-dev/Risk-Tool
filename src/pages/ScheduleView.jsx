@@ -22,6 +22,7 @@ const ScheduleView = () => {
   const [targetTaskId, setTargetTaskId] = useState('');
   const [mcIterations, setMcIterations] = useState(1000);
   const [primaryView, setPrimaryView] = useState('risk-adjusted');
+  const [filterCritical, setFilterCritical] = useState(false);
   const [error, setError] = useState(null);
   
   // Mapping Modal State
@@ -208,6 +209,18 @@ const ScheduleView = () => {
               <option value="original">Original Schedule (Solid)</option>
             </select>
           </div>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', color: 'white', fontWeight: 600 }}>
+              <input 
+                type="checkbox" 
+                checked={filterCritical} 
+                onChange={(e) => setFilterCritical(e.target.checked)}
+                style={{ width: '16px', height: '16px' }}
+              />
+              Show Critical Path Only
+            </label>
+          </div>
         </div>
       )}
 
@@ -331,51 +344,73 @@ const ScheduleView = () => {
                   {/* SVG Lines for dependencies (Overlays the flexGrow area) */}
                   <div style={{ position: 'absolute', top: '40px', left: '250px', right: 0, bottom: 0, pointerEvents: 'none', zIndex: 1 }}>
                     <svg style={{ width: '100%', height: '100%', overflow: 'visible' }}>
-                      {(schedule?.dependencies || []).map((d, i) => {
-                        const activeCpmData = (primaryView === 'risk-adjusted') ? riskCpmData : cpmData;
-                        const sTask = activeCpmData.tasks.find(t => t.id === d.source);
-                        const tTask = activeCpmData.tasks.find(t => t.id === d.target);
-                        if (!sTask || !tTask) return null;
+                      {(() => {
+                        const showRiskAsSolid = primaryView === 'risk-adjusted';
+                        const activeCpmData = showRiskAsSolid ? riskCpmData : cpmData;
                         
-                        const sIndex = activeCpmData.tasks.findIndex(t => t.id === d.source);
-                        const tIndex = activeCpmData.tasks.findIndex(t => t.id === d.target);
-                        
-                        let pathLevel = null;
-                        if (sTask.criticality === 1 && tTask.criticality === 1 && sTask.earlyFinish === tTask.earlyStart) pathLevel = 1;
-                        else if (sTask.criticality === 2 && tTask.criticality === 2 && sTask.earlyFinish === tTask.earlyStart) pathLevel = 2;
-                        else if (sTask.criticality === 3 && tTask.criticality === 3 && sTask.earlyFinish === tTask.earlyStart) pathLevel = 3;
-                        
-                        // Right edge of predecessor
-                        const x1 = (sTask.earlyFinish / (riskCpmData.projectDuration || 1)) * 100;
-                        const y1 = (sIndex * 40) + 16;
-                        
-                        // Left edge of successor
-                        const x2 = (tTask.earlyStart / (riskCpmData.projectDuration || 1)) * 100;
-                        const y2 = (tIndex * 40) + 16;
-                        
-                        const strokeColor = pathLevel === 1 ? 'var(--danger)' : 
-                                            pathLevel === 2 ? '#f97316' : // orange
-                                            pathLevel === 3 ? '#eab308' : // yellow
-                                            '#cbd5e1';
-                        
-                        return (
-                          <line 
-                            key={`dep-${i}`} 
-                            x1={`${x1}%`} y1={y1} 
-                            x2={`${x2}%`} y2={y2} 
-                            stroke={strokeColor} 
-                            strokeWidth={pathLevel ? 2 : 1}
-                            opacity={pathLevel ? 1 : 0.6}
-                          />
-                        );
-                      })}
+                        const displayedTasks = riskCpmData.tasks.filter(t => {
+                          if (!filterCritical) return true;
+                          const baseT = cpmData.tasks.find(x => x.id === t.id) || t;
+                          const activeCriticality = showRiskAsSolid ? t.criticality : baseT.criticality;
+                          return activeCriticality > 0;
+                        });
+
+                        return (schedule?.dependencies || []).map((d, i) => {
+                          const sTask = activeCpmData.tasks.find(t => t.id === d.source);
+                          const tTask = activeCpmData.tasks.find(t => t.id === d.target);
+                          if (!sTask || !tTask) return null;
+                          
+                          const sIndex = displayedTasks.findIndex(t => t.id === d.source);
+                          const tIndex = displayedTasks.findIndex(t => t.id === d.target);
+                          
+                          if (sIndex === -1 || tIndex === -1) return null;
+                          
+                          let pathLevel = null;
+                          if (sTask.criticality === 1 && tTask.criticality === 1 && sTask.earlyFinish === tTask.earlyStart) pathLevel = 1;
+                          else if (sTask.criticality === 2 && tTask.criticality === 2 && sTask.earlyFinish === tTask.earlyStart) pathLevel = 2;
+                          else if (sTask.criticality === 3 && tTask.criticality === 3 && sTask.earlyFinish === tTask.earlyStart) pathLevel = 3;
+                          
+                          // Right edge of predecessor
+                          const x1 = (sTask.earlyFinish / (riskCpmData.projectDuration || 1)) * 100;
+                          const y1 = (sIndex * 40) + 16;
+                          
+                          // Left edge of successor
+                          const x2 = (tTask.earlyStart / (riskCpmData.projectDuration || 1)) * 100;
+                          const y2 = (tIndex * 40) + 16;
+                          
+                          const strokeColor = pathLevel === 1 ? 'var(--danger)' : 
+                                              pathLevel === 2 ? '#f97316' : // orange
+                                              pathLevel === 3 ? '#eab308' : // yellow
+                                              '#cbd5e1';
+                          
+                          return (
+                            <line 
+                              key={`dep-${i}`} 
+                              x1={`${x1}%`} y1={y1} 
+                              x2={`${x2}%`} y2={y2} 
+                              stroke={strokeColor} 
+                              strokeWidth={pathLevel ? 2 : 1}
+                              opacity={pathLevel ? 1 : 0.6}
+                            />
+                          );
+                        });
+                      })()}
                     </svg>
                   </div>
 
                   {/* Task Rows */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', position: 'relative', zIndex: 2 }}>
-                    {riskCpmData.tasks.map((t, index) => {
-                      const baseT = cpmData.tasks.find(x => x.id === t.id) || t;
+                    {(() => {
+                      const showRiskAsSolid = primaryView === 'risk-adjusted';
+                      const displayedTasks = riskCpmData.tasks.filter(t => {
+                        if (!filterCritical) return true;
+                        const baseT = cpmData.tasks.find(x => x.id === t.id) || t;
+                        const activeCriticality = showRiskAsSolid ? t.criticality : baseT.criticality;
+                        return activeCriticality > 0;
+                      });
+                      
+                      return displayedTasks.map((t, index) => {
+                        const baseT = cpmData.tasks.find(x => x.id === t.id) || t;
                       
                       const riskLeftPct = (t.earlyStart / (riskCpmData.projectDuration || 1)) * 100;
                       const riskWidthPct = (t.duration / (riskCpmData.projectDuration || 1)) * 100;
@@ -460,7 +495,7 @@ const ScheduleView = () => {
                           </div>
                         </div>
                       );
-                    })}
+                    })})()}
                   </div>
                   
                 </div>
