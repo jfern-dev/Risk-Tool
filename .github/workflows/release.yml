@@ -45,7 +45,7 @@ jobs:
 
       - name: Build Electron App (Mac)
         if: matrix.os == 'macos-13'
-        run: npm run electron:build -- --mac
+        run: npm run electron:build -- --mac --universal
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
