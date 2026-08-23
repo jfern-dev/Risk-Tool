@@ -10,13 +10,11 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    name: Build & Release (${{ matrix.os }})
+  build:
+    name: Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    
     strategy:
       matrix:
-        # Build natively on both Windows and MacOS to avoid NSIS/cross-compilation errors
         os: [windows-latest, macos-latest]
 
     steps:
@@ -34,14 +32,43 @@ jobs:
 
       - name: Build Electron App (Windows)
         if: matrix.os == 'windows-latest'
-        run: npm run electron:build -- --win --publish always
+        run: npm run electron:build -- --win
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
       - name: Build Electron App (Mac)
         if: matrix.os == 'macos-latest'
-        run: npm run electron:build -- --mac --publish always
+        run: npm run electron:build -- --mac
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-${{ matrix.os }}
+          path: |
+            release/*.exe
+            release/*.zip
+            release/*.dmg
+            release/*.blockmap
+            release/*.yml
+          retention-days: 1
+
+  publish:
+    name: Publish Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all workflow run artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          pattern: artifacts-*
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-artifacts/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
