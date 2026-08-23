@@ -42,10 +42,9 @@ jobs:
 
       - name: Zip Windows Installer
         if: matrix.os == 'windows-latest'
-        shell: bash
         run: |
           cd release
-          zip Risk-Tool-Windows-Installer.zip *.exe
+          Get-ChildItem -Filter *.exe | Compress-Archive -DestinationPath Risk-Tool-Windows-Installer.zip
       - name: Build Electron App (Mac)
         if: matrix.os == 'macos-13'
         run: npm run electron:build -- --mac --universal
