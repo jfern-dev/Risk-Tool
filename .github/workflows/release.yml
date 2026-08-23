@@ -6,6 +6,9 @@ on:
       - 'v*.*.*' # Triggers when a new version tag (e.g., v7.0.0) is pushed
   workflow_dispatch: # Allows manual trigger from the Actions tab
 
+permissions:
+  contents: write
+
 jobs:
   release:
     name: Build & Release (${{ matrix.os }})
@@ -34,9 +37,11 @@ jobs:
         run: npm run electron:build -- --win --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false
 
       - name: Build Electron App (Mac)
         if: matrix.os == 'macos-latest'
         run: npm run electron:build -- --mac --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false

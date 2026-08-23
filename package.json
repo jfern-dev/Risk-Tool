@@ -1,7 +1,7 @@
 {
   "name": "risk-tool",
   "private": true,
-  "version": "7.0.1",
+  "version": "7.0.2",
   "repository": "https://github.com/jfern-dev/Risk-Tool",
   "main": "electron/main.js",
   "type": "module",
@@ -20,6 +20,7 @@
       "output": "release"
     },
     "mac": {
+      "identity": null,
       "target": [
         "dmg",
         "zip"
