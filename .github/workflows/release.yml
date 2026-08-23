@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*.*.*' # Triggers when a new version tag (e.g., v7.0.0) is pushed
   workflow_dispatch: # Allows manual trigger from the Actions tab
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -39,10 +42,10 @@ jobs:
 
       - name: Zip Windows Installer
         if: matrix.os == 'windows-latest'
+        shell: bash
         run: |
           cd release
-          Compress-Archive -Path "*.exe" -DestinationPath "Risk-Tool-Windows-Installer.zip"
-
+          zip Risk-Tool-Windows-Installer.zip *.exe
       - name: Build Electron App (Mac)
         if: matrix.os == 'macos-13'
         run: npm run electron:build -- --mac --universal
