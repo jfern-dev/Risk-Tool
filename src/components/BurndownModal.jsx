@@ -16,7 +16,7 @@ const StepRow = ({ step, riskId, onStepUpdated, onComplete }) => {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const response = await apiFetch(`http://localhost:3000/api/risks/${riskId}/burndown/${step.id}`, {
+      const response = await apiFetch(`/api/risks/${riskId}/burndown/${step.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -43,17 +43,17 @@ const StepRow = ({ step, riskId, onStepUpdated, onComplete }) => {
 
   if (step.isCompleted) {
     return (
-      <div style={{ padding: '1rem', background: 'rgba(15, 23, 42, 0.5)', borderRadius: '8px', border: '1px solid var(--border)', opacity: 0.7 }}>
-        <h4 style={{ margin: '0 0 0.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <CheckCircle size={16} color="var(--success)" />
+      <div style={{ padding: '0.5rem 0.75rem', background: 'rgba(15, 23, 42, 0.5)', borderRadius: '6px', border: '1px solid var(--border)', opacity: 0.7 }}>
+        <h4 style={{ margin: '0 0 0.25rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem' }}>
+          <CheckCircle size={14} color="var(--success)" />
           <span style={{ textDecoration: 'line-through' }}>{step.description}</span>
         </h4>
-        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
           <span>Target: {new Date(step.targetDate).toLocaleDateString()}</span>
           {step.completedAt && <span>Actual: {new Date(step.completedAt).toLocaleDateString()}</span>}
           <span>Assignees: {step.assignees}</span>
-          <span>Probability Red.: {step.likelihoodReduction || 0}</span>
-          <span>Consequence Red.: {step.impactReduction || 0}</span>
+          <span>P Red.: {step.likelihoodReduction || 0}</span>
+          <span>C Red.: {step.impactReduction || 0}</span>
         </div>
       </div>
     );
@@ -61,31 +61,31 @@ const StepRow = ({ step, riskId, onStepUpdated, onComplete }) => {
 
   if (isEditing) {
     return (
-      <div style={{ padding: '1rem', background: 'rgba(15, 23, 42, 0.5)', borderRadius: '8px', border: '1px solid var(--primary)' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          <input type="text" className="form-input" value={editDesc} onChange={e => setEditDesc(e.target.value)} style={{ padding: '0.35rem 0.5rem' }} />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
+      <div style={{ padding: '0.65rem 0.85rem', background: 'rgba(15, 23, 42, 0.5)', borderRadius: '6px', border: '1px solid var(--primary)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <input type="text" className="form-input" value={editDesc} onChange={e => setEditDesc(e.target.value)} style={{ padding: '0.3rem 0.5rem' }} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '0.5rem' }}>
             <div>
               <label className="form-label" style={{ fontSize: '0.75rem' }}>Target Date</label>
-              <input type="date" className="form-input" value={editTargetDate} onChange={e => setEditTargetDate(e.target.value)} style={{ padding: '0.35rem 0.5rem' }} />
+              <input type="date" className="form-input" value={editTargetDate} onChange={e => setEditTargetDate(e.target.value)} style={{ padding: '0.3rem 0.5rem' }} />
             </div>
             <div>
               <label className="form-label" style={{ fontSize: '0.75rem' }}>Assignees</label>
-              <input type="text" className="form-input" value={editAssignees} onChange={e => setEditAssignees(e.target.value)} style={{ padding: '0.35rem 0.5rem' }} />
+              <input type="text" className="form-input" value={editAssignees} onChange={e => setEditAssignees(e.target.value)} style={{ padding: '0.3rem 0.5rem' }} />
             </div>
             <div>
               <label className="form-label" style={{ fontSize: '0.75rem' }}>L Reduction</label>
-              <input type="number" min="0" max="5" className="form-input" value={editLikelihoodReduction} onChange={e => setEditLikelihoodReduction(Number(e.target.value))} style={{ padding: '0.35rem 0.5rem' }} />
+              <input type="number" min="0" max="5" className="form-input" value={editLikelihoodReduction} onChange={e => setEditLikelihoodReduction(Number(e.target.value))} style={{ padding: '0.3rem 0.5rem' }} />
             </div>
             <div>
               <label className="form-label" style={{ fontSize: '0.75rem' }}>I Reduction</label>
-              <input type="number" min="0" max="5" className="form-input" value={editImpactReduction} onChange={e => setEditImpactReduction(Number(e.target.value))} style={{ padding: '0.35rem 0.5rem' }} />
+              <input type="number" min="0" max="5" className="form-input" value={editImpactReduction} onChange={e => setEditImpactReduction(Number(e.target.value))} style={{ padding: '0.3rem 0.5rem' }} />
             </div>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-            <button onClick={() => setIsEditing(false)} className="btn" style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)' }}>Cancel</button>
-            <button onClick={handleSave} className="btn" style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }} disabled={saving}>
-              <Save size={14} style={{ marginRight: '4px' }} /> {saving ? 'Saving...' : 'Save'}
+            <button onClick={() => setIsEditing(false)} className="btn" style={{ padding: '0.2rem 0.6rem', fontSize: '0.8rem', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)' }}>Cancel</button>
+            <button onClick={handleSave} className="btn" style={{ padding: '0.2rem 0.6rem', fontSize: '0.8rem' }} disabled={saving}>
+              <Save size={12} style={{ marginRight: '4px' }} /> {saving ? 'Saving...' : 'Save'}
             </button>
           </div>
         </div>
@@ -94,27 +94,27 @@ const StepRow = ({ step, riskId, onStepUpdated, onComplete }) => {
   }
 
   return (
-    <div style={{ padding: '1rem', background: 'rgba(15, 23, 42, 0.5)', borderRadius: '8px', border: '1px solid var(--border)' }}>
+    <div style={{ padding: '0.65rem 0.85rem', background: 'rgba(15, 23, 42, 0.5)', borderRadius: '6px', border: '1px solid var(--border)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div style={{ flex: 1 }}>
-          <h4 style={{ margin: '0 0 0.5rem 0' }}>{step.description}</h4>
-          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+          <h4 style={{ margin: '0 0 0.25rem 0', fontSize: '0.9rem' }}>{step.description}</h4>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
             <span>Target: {new Date(step.targetDate).toLocaleDateString()}</span>
-            <span>Assignees: {step.assignees}</span>
-            <span>P Reduction: {step.likelihoodReduction || 0}</span>
-            <span>C Reduction: {step.impactReduction || 0}</span>
+            <span>Assignees: {step.assignees || 'None'}</span>
+            <span>P Red.: -{step.likelihoodReduction || 0}</span>
+            <span>C Red.: -{step.impactReduction || 0}</span>
           </div>
           {step.impactOnConsequence && (
-            <p style={{ fontSize: '0.8rem', margin: '0.5rem 0 0 0', color: 'var(--text-muted)' }}>
+            <p style={{ fontSize: '0.75rem', margin: '0.25rem 0 0 0', color: 'var(--text-muted)' }}>
               <strong>Impact on Consequence:</strong> {step.impactOnConsequence}
             </p>
           )}
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button onClick={() => setIsEditing(true)} className="btn" style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)' }}>
-            <Pencil size={14} style={{ marginRight: '4px' }} /> Edit
+        <div style={{ display: 'flex', gap: '0.4rem' }}>
+          <button onClick={() => setIsEditing(true)} className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)' }}>
+            <Pencil size={12} />
           </button>
-          <button onClick={onComplete} className="btn" style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}>
+          <button onClick={onComplete} className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', background: 'var(--success)', color: 'white' }}>
             Complete
           </button>
         </div>
@@ -143,7 +143,7 @@ const BurndownModal = ({ risk, onClose, onRiskUpdated }) => {
   const [customValues, setCustomValues] = useState({});
 
   React.useEffect(() => {
-    apiFetch('http://localhost:3000/api/fields/burndown')
+    apiFetch('/api/fields/burndown')
       .then(res => res.json())
       .then(data => { if (Array.isArray(data)) setFieldDefs(data); })
       .catch(console.error);
@@ -154,7 +154,7 @@ const BurndownModal = ({ risk, onClose, onRiskUpdated }) => {
     setLoading(true);
 
     try {
-      const response = await apiFetch(`http://localhost:3000/api/risks/${risk.id}/burndown`, {
+      const response = await apiFetch(`/api/risks/${risk.id}/burndown`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -173,7 +173,7 @@ const BurndownModal = ({ risk, onClose, onRiskUpdated }) => {
         .map(f => ({ name: f.name, value: customValues[f.name] }));
 
       if (customEntries.length > 0) {
-        const cfRes = await apiFetch(`http://localhost:3000/api/risks/${risk.id}/burndown/${newStep.id}/custom-fields`, {
+        const cfRes = await apiFetch(`/api/risks/${risk.id}/burndown/${newStep.id}/custom-fields`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ fields: customEntries })
@@ -200,7 +200,7 @@ const BurndownModal = ({ risk, onClose, onRiskUpdated }) => {
 
   const executeCompleteStep = async () => {
     try {
-      const response = await apiFetch(`http://localhost:3000/api/risks/${risk.id}/burndown/${completingStep.id}/complete`, { 
+      const response = await apiFetch(`/api/risks/${risk.id}/burndown/${completingStep.id}/complete`, { 
         method: 'PUT', 
         body: JSON.stringify({ actualLikelihood: Number(actualLikelihood), actualImpact: Number(actualImpact) }) 
       });
@@ -224,20 +224,25 @@ const BurndownModal = ({ risk, onClose, onRiskUpdated }) => {
 
   return (
     <div className="modal-overlay">
-      <div className="modal-content card" style={{ maxWidth: '700px', maxHeight: '90vh', overflowY: 'auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-          <h2 style={{ margin: 0 }}>Action Plan (Burndown): {risk.title}</h2>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
-            <X size={24} />
-          </button>
+      <div className="modal-content card" style={{ maxWidth: '700px', maxHeight: '92vh', overflowY: 'auto' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', gap: '1rem' }}>
+          <h2 style={{ margin: 0, fontSize: '1.25rem' }}>Action Plan (Burndown): {risk.title}</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+            <button onClick={onClose} className="btn" style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', padding: '0.35rem 0.75rem', fontSize: '0.85rem' }}>
+              Close
+            </button>
+            <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px' }}>
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
-        <div style={{ marginBottom: '2rem' }}>
-          <h3 style={{ fontSize: '1.1rem', marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>Active & Completed Actions</h3>
+        <div style={{ marginBottom: '1rem' }}>
+          <h3 style={{ fontSize: '0.95rem', marginBottom: '0.5rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.35rem' }}>Active & Completed Actions</h3>
           {(!risk.burndownSteps || risk.burndownSteps.length === 0) ? (
-            <p style={{ color: 'var(--text-muted)' }}>No actions recorded yet.</p>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No actions recorded yet.</p>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               {[...risk.burndownSteps]
                 .sort((a, b) => new Date(a.targetDate).getTime() - new Date(b.targetDate).getTime())
                 .map(step => (
@@ -263,10 +268,15 @@ const BurndownModal = ({ risk, onClose, onRiskUpdated }) => {
         </div>
 
         <div>
-          <h3 style={{ fontSize: '1.1rem', marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>Add New Action</h3>
-          <form onSubmit={handleAddStep} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.35rem' }}>
+            <h3 style={{ fontSize: '0.95rem', margin: 0 }}>Add New Action</h3>
+            <button type="submit" form="add-action-form" className="btn btn-primary" style={{ padding: '0.3rem 0.75rem', fontSize: '0.85rem' }} disabled={loading}>
+              {loading ? 'Adding...' : 'Add Action'}
+            </button>
+          </div>
+          <form id="add-action-form" onSubmit={handleAddStep} style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
             
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '0.65rem' }}>
               <div>
                 <label className="form-label">Description of Action</label>
                 <input required type="text" className="form-input" value={description} onChange={e => setDescription(e.target.value)} placeholder="e.g. Implement 2FA" />
@@ -277,17 +287,17 @@ const BurndownModal = ({ risk, onClose, onRiskUpdated }) => {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '1rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '0.65rem' }}>
               <div>
                 <label className="form-label">Assignees</label>
                 <input type="text" className="form-input" value={assignees} onChange={e => setAssignees(e.target.value)} placeholder="Comma-separated" />
               </div>
               <div>
-                <label className="form-label">Probability Reduction</label>
+                <label className="form-label">P Reduction</label>
                 <input type="number" min="0" max="5" className="form-input" value={likelihoodReduction} onChange={e => setLikelihoodReduction(Number(e.target.value))} />
               </div>
               <div>
-                <label className="form-label">Consequence Reduction</label>
+                <label className="form-label">C Reduction</label>
                 <input type="number" min="0" max="5" className="form-input" value={impactReduction} onChange={e => setImpactReduction(Number(e.target.value))} />
               </div>
             </div>
@@ -308,9 +318,9 @@ const BurndownModal = ({ risk, onClose, onRiskUpdated }) => {
             </div>
 
             {fieldDefs.length > 0 && (
-              <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
-                <h4 style={{ margin: '0 0 0.75rem 0', color: 'var(--text-muted)', fontSize: '0.9rem' }}>Additional Fields</h4>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.65rem' }}>
+                <h4 style={{ margin: '0 0 0.5rem 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Additional Fields</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.65rem' }}>
                   {fieldDefs.map(field => (
                     <div key={field.id}>
                       <label className="form-label">{field.name} {field.required && <span style={{ color: 'var(--danger)' }}>*</span>}</label>
@@ -324,20 +334,22 @@ const BurndownModal = ({ risk, onClose, onRiskUpdated }) => {
                 </div>
               </div>
             )}
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
-              <button type="submit" className="btn" disabled={loading}>{loading ? 'Adding...' : 'Add Action'}</button>
-            </div>
           </form>
         </div>
       </div>
       
       {completingStep && (
         <div className="modal-overlay" style={{ zIndex: 1100, background: 'rgba(0,0,0,0.8)' }}>
-          <div className="modal-content card" style={{ maxWidth: '400px' }}>
-            <h3 style={{ marginTop: 0 }}>Complete Action</h3>
-            <p style={{ color: 'var(--text-muted)' }}>Confirm the new actual scores and date of completion:</p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', margin: '1.5rem 0' }}>
+          <div className="modal-content card" style={{ maxWidth: '420px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', gap: '0.75rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1.15rem' }}>Complete Action</h3>
+              <div style={{ display: 'flex', gap: '0.4rem', flexShrink: 0 }}>
+                <button className="btn" style={{ background: 'transparent', color: 'var(--text)', border: '1px solid var(--border)', padding: '0.25rem 0.6rem', fontSize: '0.8rem' }} onClick={() => setCompletingStep(null)}>Cancel</button>
+                <button className="btn btn-primary" style={{ padding: '0.25rem 0.75rem', fontSize: '0.8rem' }} onClick={executeCompleteStep}>Confirm</button>
+              </div>
+            </div>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '0.75rem' }}>Confirm the new actual scores and date of completion:</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.65rem', margin: '0.75rem 0' }}>
               {risk.itemType !== 'Issue' && (
                 <div>
                   <label className="form-label">New Probability (1-5)</label>
@@ -349,13 +361,9 @@ const BurndownModal = ({ risk, onClose, onRiskUpdated }) => {
                 <input type="number" min="1" max="5" className="form-input" value={actualImpact} onChange={e => setActualImpact(Number(e.target.value))} />
               </div>
             </div>
-            <div style={{ marginBottom: '1.5rem' }}>
+            <div style={{ marginBottom: '0.5rem' }}>
               <label className="form-label">Date Completed</label>
               <input type="date" className="form-input" value={completedDate} onChange={e => setCompletedDate(e.target.value)} />
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-              <button className="btn" style={{ background: 'transparent', color: 'var(--text)', border: '1px solid var(--border)' }} onClick={() => setCompletingStep(null)}>Cancel</button>
-              <button className="btn" onClick={executeCompleteStep}>Confirm Completion</button>
             </div>
           </div>
         </div>

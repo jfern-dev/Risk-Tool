@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import RiskFormModal from './RiskFormModal';
 import { RotateCcw } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
@@ -6,7 +6,37 @@ import ConfirmModal from '../components/ConfirmModal';
 const ItemHistoryModal = ({ risk, onClose, onRestore }) => {
   const snapshots = risk.snapshots || [];
   const [confirmRestoreId, setConfirmRestoreId] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [selectedSnapId, setSelectedSnapId] = useState(null);
+
+  // Group snapshots by date
+  const groupedSnapshots = useMemo(() => {
+    const groups = {};
+    snapshots.forEach(s => {
+      const d = new Date(s.date).toLocaleDateString();
+      if (!groups[d]) groups[d] = [];
+      groups[d].push(s);
+    });
+    return groups;
+  }, [risk.snapshots]);
   
+  // Sort dates descending
+  const dates = useMemo(() => Object.keys(groupedSnapshots).sort((a, b) => new Date(b) - new Date(a)), [groupedSnapshots]);
+
+  useEffect(() => {
+    if (dates.length > 0 && !selectedDate) {
+      setSelectedDate(dates[0]);
+    }
+  }, [dates, selectedDate]);
+
+  useEffect(() => {
+    if (!selectedDate) return;
+    const snapsOnDate = groupedSnapshots[selectedDate];
+    if (snapsOnDate && !snapsOnDate.find(s => s.id === selectedSnapId)) {
+      setSelectedSnapId(snapsOnDate[snapsOnDate.length - 1].id);
+    }
+  }, [selectedDate, selectedSnapId, groupedSnapshots]);
+
   if (snapshots.length === 0) {
     return (
       <div className="modal-overlay">
@@ -20,31 +50,6 @@ const ItemHistoryModal = ({ risk, onClose, onRestore }) => {
       </div>
     );
   }
-
-  // Group snapshots by date
-  const groupedSnapshots = {};
-  snapshots.forEach(s => {
-    const d = new Date(s.date).toLocaleDateString();
-    if (!groupedSnapshots[d]) groupedSnapshots[d] = [];
-    groupedSnapshots[d].push(s);
-  });
-  
-  // Sort dates descending
-  const dates = Object.keys(groupedSnapshots).sort((a, b) => new Date(b) - new Date(a));
-  
-  // Default to newest date and newest snapshot
-  const [selectedDate, setSelectedDate] = useState(dates[0]);
-  const [selectedSnapId, setSelectedSnapId] = useState(() => {
-    const snapsOnDate = groupedSnapshots[dates[0]];
-    return snapsOnDate[snapsOnDate.length - 1].id;
-  });
-
-  useEffect(() => {
-    const snapsOnDate = groupedSnapshots[selectedDate];
-    if (snapsOnDate && !snapsOnDate.find(s => s.id === selectedSnapId)) {
-      setSelectedSnapId(snapsOnDate[snapsOnDate.length - 1].id);
-    }
-  }, [selectedDate, selectedSnapId]);
 
   const selectedSnapshot = snapshots.find(s => s.id === selectedSnapId) || snapshots[0];
 

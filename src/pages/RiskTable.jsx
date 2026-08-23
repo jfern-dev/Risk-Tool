@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
+import { PlusCircle, Search, X, ArrowUpDown} from 'lucide-react';
 import { apiFetch } from '../utils/api';
 import { getScoreClass, getOppScoreClass, getIssueScoreClass } from '../components/RiskMatrix';
 
@@ -104,14 +105,21 @@ const EditableCell = ({ value, field, type = 'text', options = [], onSave }) => 
     <div 
       onClick={() => setIsEditing(true)} 
       style={{ 
-        cursor: 'pointer', padding: '0.25rem', borderRadius: '4px', 
-        transition: 'background 0.2s', minHeight: '24px', whiteSpace: type === 'textarea' ? 'pre-wrap' : 'nowrap',
-        overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '200px'
+        cursor: 'pointer', padding: '0.25rem 0.35rem', borderRadius: '4px', 
+        transition: 'all 0.18s ease', minHeight: '24px', whiteSpace: type === 'textarea' ? 'pre-wrap' : 'nowrap',
+        overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '200px',
+        border: '1px solid transparent'
       }}
-      onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
-      onMouseOut={e => e.currentTarget.style.background = 'transparent'}
+      onMouseOver={e => {
+        e.currentTarget.style.background = 'rgba(99, 102, 241, 0.08)';
+        e.currentTarget.style.borderColor = 'rgba(99, 102, 241, 0.3)';
+      }}
+      onMouseOut={e => {
+        e.currentTarget.style.background = 'transparent';
+        e.currentTarget.style.borderColor = 'transparent';
+      }}
     >
-      {strippedValue || <span style={{ color: 'var(--text-muted)' }}>Empty</span>}
+      {strippedValue || <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', opacity: 0.6 }}>-</span>}
     </div>
   );
 };
@@ -122,7 +130,7 @@ const CheckboxCell = ({ value, field, onSave }) => (
       type="checkbox" 
       checked={!!value} 
       onChange={e => onSave(field, e.target.checked)} 
-      style={{ cursor: 'pointer', transform: 'scale(1.2)' }}
+      style={{ cursor: 'pointer', accentColor: 'var(--primary)' }}
     />
   </div>
 );
@@ -132,14 +140,15 @@ const RiskTable = () => {
   const [riskFields, setRiskFields] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
   const [dashboardSettings, setDashboardSettings] = useState(null);
   const [sortConfig, setSortConfig] = useState({ key: 'userRiskId', direction: 'asc' });
 
   useEffect(() => {
     Promise.all([
-      apiFetch('http://localhost:3000/api/risks').then(r => r.json()),
-      apiFetch('http://localhost:3000/api/fields/risk').then(r => r.json()),
-      apiFetch('http://localhost:3000/api/dashboardSettings').then(r => r.json())
+      apiFetch('/api/risks').then(r => r.json()),
+      apiFetch('/api/fields/risk').then(r => r.json()),
+      apiFetch('/api/dashboardSettings').then(r => r.json())
     ])
       .then(([risksData, fieldsData, settingsData]) => {
         if (!risksData.error && Array.isArray(risksData)) setRisks(risksData);
@@ -175,7 +184,7 @@ const RiskTable = () => {
     }
     
     try {
-      const response = await apiFetch(`http://localhost:3000/api/risks/${id}`, {
+      const response = await apiFetch(`/api/risks/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updateBody)
@@ -185,17 +194,16 @@ const RiskTable = () => {
       setRisks(prev => prev.map(r => r.id === id ? { ...r, ...updatedRisk } : r));
     } catch (error) {
       toast.error(error.message);
-      // rollback handled by refetch ideally, but omitting for brevity
     }
   };
 
   const handleCreateNewRisk = async () => {
     try {
-      const response = await apiFetch('http://localhost:3000/api/risks', {
+      const response = await apiFetch('/api/risks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          itemType: 'Risk',
+          itemType: filterType === 'All' ? 'Risk' : filterType,
           title: 'New Item',
           userRiskId: `R-${String((risks.reduce((max, r) => {
             const match = r.userRiskId?.match(/\d+$/);
@@ -208,20 +216,29 @@ const RiskTable = () => {
       if (!response.ok) throw new Error('Failed to create row');
       const newRisk = await response.json();
       setRisks(prev => [...prev, newRisk]);
+      toast.success('New item row added');
     } catch (err) {
       toast.error(err.message);
     }
   };
 
-  if (loading) return <div className="container" style={{ textAlign: 'center', padding: '4rem' }}>Loading Table...</div>;
+  if (loading) return <div className="container" style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-muted)' }}>Loading Table...</div>;
 
-  const filteredRisks = risks.filter(r => filterType === 'All' || (r.itemType || 'Risk') === filterType);
+  const filteredRisks = risks.filter(r => {
+    const typeMatch = filterType === 'All' || (r.itemType || 'Risk') === filterType;
+    const searchMatch = !searchQuery || 
+      (r.title && r.title.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (r.userRiskId && r.userRiskId.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (r.description && r.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (r.gpocs && r.gpocs.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (r.cpocs && r.cpocs.toLowerCase().includes(searchQuery.toLowerCase()));
+    return typeMatch && searchMatch;
+  });
   
   const sortedRisks = [...filteredRisks].sort((a, b) => {
     let aValue = a[sortConfig.key] ?? '';
     let bValue = b[sortConfig.key] ?? '';
     
-    // Custom logic for score
     if (sortConfig.key === 'score') {
       aValue = (a.likelihood || 0) * (a.impact || 0);
       bValue = (b.likelihood || 0) * (b.impact || 0);
@@ -240,35 +257,78 @@ const RiskTable = () => {
 
   const SortHeader = ({ label, sortKey }) => (
     <th 
-      style={{ padding: '0.75rem', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', userSelect: 'none' }}
+      style={{ padding: '0.45rem 0.6rem', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer', whiteSpace: 'nowrap', userSelect: 'none', color: sortConfig.key === sortKey ? 'var(--primary-hover)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}
       onClick={() => handleSort(sortKey)}
     >
-      {label} {sortConfig.key === sortKey ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+        <span>{label}</span>
+        {sortConfig.key === sortKey ? (
+          <span style={{ color: 'var(--primary)' }}>{sortConfig.direction === 'asc' ? '▲' : '▼'}</span>
+        ) : (
+          <ArrowUpDown size={11} style={{ opacity: 0.3 }} />
+        )}
+      </div>
     </th>
   );
 
   return (
-    <div className="container" style={{ maxWidth: '100%', padding: '2rem 1rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <h2 style={{ margin: 0 }}>Data Table Register</h2>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <label style={{ fontWeight: 600 }}>Filter By Type:</label>
-          <select 
-            className="form-input" 
-            style={{ width: 'auto' }}
-            value={filterType} 
-            onChange={(e) => setFilterType(e.target.value)}
-          >
-            <option value="All">All Items</option>
-            <option value="Risk">Risks</option>
-            <option value="Issue">Issues</option>
-            <option value="Opportunity">Opportunities</option>
-          </select>
+    <div className="container" style={{ maxWidth: '100%', padding: '0.85rem 1.25rem' }}>
+      
+      {/* Table Toolbar */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', gap: '1rem', flexWrap: 'wrap' }}>
+        
+        {/* Filter Tabs */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', background: 'rgba(0, 0, 0, 0.25)', padding: '3px', borderRadius: '8px', border: '1px solid var(--border)' }}>
+          {[
+            { id: 'All', label: 'All Items', count: risks.length },
+            { id: 'Risk', label: 'Risks', count: risks.filter(r => (r.itemType || 'Risk') === 'Risk').length },
+            { id: 'Issue', label: 'Issues', count: risks.filter(r => (r.itemType || 'Risk') === 'Issue').length },
+            { id: 'Opportunity', label: 'Opportunities', count: risks.filter(r => (r.itemType || 'Risk') === 'Opportunity').length }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setFilterType(tab.id)}
+              className={`filter-chip ${filterType === tab.id ? 'active' : ''}`}
+              style={{ borderRadius: '6px' }}
+            >
+              <span>{tab.label}</span>
+              <span style={{ fontSize: '0.7rem', padding: '1px 5px', borderRadius: '9999px', background: filterType === tab.id ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.08)' }}>
+                {tab.count}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {/* Right Actions */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+          
+          {/* Quick Search */}
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <Search size={14} color="var(--text-muted)" style={{ position: 'absolute', left: '8px', pointerEvents: 'none' }} />
+            <input
+              type="text"
+              placeholder="Search table rows..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="form-input"
+              style={{ paddingLeft: '28px', paddingRight: searchQuery ? '24px' : '8px', width: '220px', fontSize: '0.8rem' }}
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} style={{ position: 'absolute', right: '6px', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex' }}>
+                <X size={13} />
+              </button>
+            )}
+          </div>
+
+          <button className="btn btn-primary" onClick={handleCreateNewRisk}>
+            <PlusCircle size={15} />
+            Add Row
+          </button>
         </div>
       </div>
       
-      <div className="card" style={{ overflowX: 'auto', padding: '0', maxHeight: '75vh', overflowY: 'auto' }}>
-        <table style={{ width: 'max-content', minWidth: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+      <div className="card" style={{ overflowX: 'auto', padding: '0', maxHeight: 'calc(100vh - 140px)', overflowY: 'auto' }}>
+        <table style={{ width: 'max-content', minWidth: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.825rem' }}>
           <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--surface)' }}>
             <tr style={{ background: 'rgba(0,0,0,0.3)', borderBottom: '2px solid var(--border)' }}>
               <SortHeader label="ID" sortKey="userRiskId" />
@@ -280,20 +340,21 @@ const RiskTable = () => {
               <SortHeader label="GPOCs" sortKey="gpocs" />
               <SortHeader label="CPOCs" sortKey="cpocs" />
               <SortHeader label="Description" sortKey="description" />
+              <SortHeader label="Closure Criteria" sortKey="closureCriteria" />
               <SortHeader label="P" sortKey="likelihood" />
               <SortHeader label="C" sortKey="impact" />
               <SortHeader label="Score" sortKey="score" />
-              <th style={{ padding: '0.75rem', fontWeight: 600 }}>Impact Statement</th>
-              <th style={{ padding: '0.75rem', fontWeight: 600 }}>Impact (Cost)</th>
-              <th style={{ padding: '0.75rem', fontWeight: 600 }}>Impact (Sched)</th>
-              <th style={{ padding: '0.75rem', fontWeight: 600 }}>Impact (Perf)</th>
-              <th style={{ padding: '0.75rem', fontWeight: 600 }}>SPoF?</th>
-              <th style={{ padding: '0.75rem', fontWeight: 600 }}>SPoF Desc</th>
-              <th style={{ padding: '0.75rem', fontWeight: 600 }}>Res. Cost</th>
-              <th style={{ padding: '0.75rem', fontWeight: 600 }}>Res. Sched</th>
-              <th style={{ padding: '0.75rem', fontWeight: 600 }}>Plan Realism</th>
+              <th style={{ padding: '0.4rem 0.5rem', fontWeight: 600, fontSize: '0.8rem' }}>Impact Statement</th>
+              <th style={{ padding: '0.4rem 0.5rem', fontWeight: 600, fontSize: '0.8rem' }}>Impact (Cost)</th>
+              <th style={{ padding: '0.4rem 0.5rem', fontWeight: 600, fontSize: '0.8rem' }}>Impact (Sched)</th>
+              <th style={{ padding: '0.4rem 0.5rem', fontWeight: 600, fontSize: '0.8rem' }}>Impact (Perf)</th>
+              <th style={{ padding: '0.4rem 0.5rem', fontWeight: 600, fontSize: '0.8rem' }}>SPoF?</th>
+              <th style={{ padding: '0.4rem 0.5rem', fontWeight: 600, fontSize: '0.8rem' }}>SPoF Desc</th>
+              <th style={{ padding: '0.4rem 0.5rem', fontWeight: 600, fontSize: '0.8rem' }}>Res. Cost</th>
+              <th style={{ padding: '0.4rem 0.5rem', fontWeight: 600, fontSize: '0.8rem' }}>Res. Sched</th>
+              <th style={{ padding: '0.4rem 0.5rem', fontWeight: 600, fontSize: '0.8rem' }}>Plan Realism</th>
               {riskFields.map(f => (
-                <th key={f.id} style={{ padding: '0.75rem', fontWeight: 600 }}>{f.name}</th>
+                <th key={f.id} style={{ padding: '0.4rem 0.5rem', fontWeight: 600, fontSize: '0.8rem' }}>{f.name}</th>
               ))}
             </tr>
           </thead>
@@ -316,16 +377,16 @@ const RiskTable = () => {
 
                 return (
                   <tr key={risk.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                    <td style={{ padding: '0.5rem', verticalAlign: 'top', borderRight: '1px solid var(--border)' }}>
+                    <td style={{ padding: '0.25rem 0.4rem', verticalAlign: 'top', borderRight: '1px solid var(--border)' }}>
                       <EditableCell value={risk.userRiskId} field="userRiskId" onSave={(field, val) => handleSave(risk.id, field, val)} />
                     </td>
-                    <td style={{ padding: '0.5rem', verticalAlign: 'top' }}>
+                    <td style={{ padding: '0.25rem 0.4rem', verticalAlign: 'top' }}>
                       <EditableCell value={type} field="itemType" type="select" options={['Risk', 'Issue', 'Opportunity']} onSave={(field, val) => handleSave(risk.id, field, val)} />
                     </td>
-                    <td style={{ padding: '0.5rem', verticalAlign: 'top' }}>
+                    <td style={{ padding: '0.25rem 0.4rem', verticalAlign: 'top' }}>
                       <EditableCell value={risk.title} field="title" onSave={(field, val) => handleSave(risk.id, field, val)} />
                     </td>
-                    <td style={{ padding: '0.5rem', verticalAlign: 'top' }}>
+                    <td style={{ padding: '0.25rem 0.4rem', verticalAlign: 'top' }}>
                       <EditableCell 
                         value={risk.level} field="level" 
                         type={dashboardSettings?.picklists?.level?.isMultiSelect ? 'multiselect' : 'select'} 
@@ -333,7 +394,7 @@ const RiskTable = () => {
                         onSave={(field, val) => handleSave(risk.id, field, val)} 
                       />
                     </td>
-                    <td style={{ padding: '0.5rem', verticalAlign: 'top' }}>
+                    <td style={{ padding: '0.25rem 0.4rem', verticalAlign: 'top' }}>
                       <EditableCell 
                         value={risk.riskCategory} field="riskCategory" 
                         type={dashboardSettings?.picklists?.riskCategory?.isMultiSelect ? 'multiselect' : 'select'} 
@@ -341,7 +402,7 @@ const RiskTable = () => {
                         onSave={(field, val) => handleSave(risk.id, field, val)} 
                       />
                     </td>
-                    <td style={{ padding: '0.5rem', verticalAlign: 'top' }}>
+                    <td style={{ padding: '0.25rem 0.4rem', verticalAlign: 'top' }}>
                       <EditableCell 
                         value={risk.handlingStrategy} field="handlingStrategy" 
                         type={dashboardSettings?.picklists?.handlingStrategy?.isMultiSelect ? 'multiselect' : 'select'} 
@@ -349,62 +410,65 @@ const RiskTable = () => {
                         onSave={(field, val) => handleSave(risk.id, field, val)} 
                       />
                     </td>
-                    <td style={{ padding: '0.5rem', verticalAlign: 'top' }}>
+                    <td style={{ padding: '0.25rem 0.4rem', verticalAlign: 'top' }}>
                       <EditableCell value={risk.gpocs} field="gpocs" onSave={(field, val) => handleSave(risk.id, field, val)} />
                     </td>
-                    <td style={{ padding: '0.5rem', verticalAlign: 'top' }}>
+                    <td style={{ padding: '0.25rem 0.4rem', verticalAlign: 'top' }}>
                       <EditableCell value={risk.cpocs} field="cpocs" onSave={(field, val) => handleSave(risk.id, field, val)} />
                     </td>
-                    <td style={{ padding: '0.5rem', verticalAlign: 'top', minWidth: '200px' }}>
+                    <td style={{ padding: '0.25rem 0.4rem', verticalAlign: 'top', minWidth: '180px' }}>
                       <EditableCell value={risk.description} field="description" type="textarea" onSave={(field, val) => handleSave(risk.id, field, val)} />
                     </td>
-                    <td style={{ padding: '0.5rem', verticalAlign: 'top', background: 'rgba(0,0,0,0.2)' }}>
+                    <td style={{ padding: '0.25rem 0.4rem', verticalAlign: 'top', minWidth: '180px' }}>
+                      <EditableCell value={risk.closureCriteria} field="closureCriteria" type="textarea" onSave={(field, val) => handleSave(risk.id, field, val)} />
+                    </td>
+                    <td style={{ padding: '0.25rem 0.4rem', verticalAlign: 'top', background: 'rgba(0,0,0,0.2)' }}>
                       {type === 'Issue' ? (
-                        <div style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: '0.25rem' }}>N/A</div>
+                        <div style={{ color: 'var(--text-muted)', textAlign: 'center' }}>N/A</div>
                       ) : (
                         <EditableCell value={l} field="likelihood" type="number" onSave={(field, val) => handleSave(risk.id, field, Number(val))} />
                       )}
                     </td>
-                    <td style={{ padding: '0.5rem', verticalAlign: 'top', background: 'rgba(0,0,0,0.2)' }}>
+                    <td style={{ padding: '0.25rem 0.4rem', verticalAlign: 'top', background: 'rgba(0,0,0,0.2)' }}>
                       <EditableCell value={i} field="impact" type="number" onSave={(field, val) => handleSave(risk.id, field, Number(val))} />
                     </td>
-                    <td style={{ padding: '0.5rem', verticalAlign: 'top', background: 'rgba(0,0,0,0.2)' }}>
-                      <span className={badgeClass} style={{ padding: '2px 8px', borderRadius: '4px', fontWeight: 'bold' }}>
+                    <td style={{ padding: '0.25rem 0.4rem', verticalAlign: 'top', background: 'rgba(0,0,0,0.2)' }}>
+                      <span className={badgeClass} style={{ padding: '1px 6px', borderRadius: '4px', fontWeight: 'bold', fontSize: '0.75rem' }}>
                         {type === 'Issue' ? i : score}
                       </span>
                     </td>
-                    <td style={{ padding: '0.5rem', verticalAlign: 'top', minWidth: '200px' }}>
+                    <td style={{ padding: '0.25rem 0.4rem', verticalAlign: 'top', minWidth: '180px' }}>
                       <EditableCell value={risk.impactStatement} field="impactStatement" type="textarea" onSave={(field, val) => handleSave(risk.id, field, val)} />
                     </td>
-                    <td style={{ padding: '0.5rem', verticalAlign: 'top' }}>
+                    <td style={{ padding: '0.25rem 0.4rem', verticalAlign: 'top' }}>
                       <EditableCell value={risk.impactCost} field="impactCost" type="textarea" onSave={(field, val) => handleSave(risk.id, field, val)} />
                     </td>
-                    <td style={{ padding: '0.5rem', verticalAlign: 'top' }}>
+                    <td style={{ padding: '0.25rem 0.4rem', verticalAlign: 'top' }}>
                       <EditableCell value={risk.impactSchedule} field="impactSchedule" type="textarea" onSave={(field, val) => handleSave(risk.id, field, val)} />
                     </td>
-                    <td style={{ padding: '0.5rem', verticalAlign: 'top' }}>
+                    <td style={{ padding: '0.25rem 0.4rem', verticalAlign: 'top' }}>
                       <EditableCell value={risk.impactPerformance} field="impactPerformance" type="textarea" onSave={(field, val) => handleSave(risk.id, field, val)} />
                     </td>
-                    <td style={{ padding: '0.5rem', verticalAlign: 'top' }}>
+                    <td style={{ padding: '0.25rem 0.4rem', verticalAlign: 'top' }}>
                       <CheckboxCell value={risk.isSpof} field="isSpof" onSave={(field, val) => handleSave(risk.id, field, val)} />
                     </td>
-                    <td style={{ padding: '0.5rem', verticalAlign: 'top' }}>
+                    <td style={{ padding: '0.25rem 0.4rem', verticalAlign: 'top' }}>
                       <EditableCell value={risk.spofDescription} field="spofDescription" type="textarea" onSave={(field, val) => handleSave(risk.id, field, val)} />
                     </td>
-                    <td style={{ padding: '0.5rem', verticalAlign: 'top' }}>
+                    <td style={{ padding: '0.25rem 0.4rem', verticalAlign: 'top' }}>
                       <EditableCell value={risk.resourceCostNeeded} field="resourceCostNeeded" type="textarea" onSave={(field, val) => handleSave(risk.id, field, val)} />
                     </td>
-                    <td style={{ padding: '0.5rem', verticalAlign: 'top' }}>
+                    <td style={{ padding: '0.25rem 0.4rem', verticalAlign: 'top' }}>
                       <EditableCell value={risk.resourceScheduleNeeded} field="resourceScheduleNeeded" type="textarea" onSave={(field, val) => handleSave(risk.id, field, val)} />
                     </td>
-                    <td style={{ padding: '0.5rem', verticalAlign: 'top' }}>
+                    <td style={{ padding: '0.25rem 0.4rem', verticalAlign: 'top' }}>
                       <EditableCell value={risk.planRealism} field="planRealism" type="textarea" onSave={(field, val) => handleSave(risk.id, field, val)} />
                     </td>
                     
                     {riskFields.map(f => {
                       const customVal = (risk.customFields || []).find(c => c.name === f.name);
                       return (
-                        <td key={f.id} style={{ padding: '0.5rem', verticalAlign: 'top' }}>
+                        <td key={f.id} style={{ padding: '0.25rem 0.4rem', verticalAlign: 'top' }}>
                         <EditableCell 
                           value={customVal ? customVal.value : ''} 
                           field={`custom:${f.name}`} 
@@ -421,10 +485,10 @@ const RiskTable = () => {
             )}
             
             <tr style={{ background: 'rgba(255,255,255,0.02)' }}>
-              <td colSpan={25 + riskFields.length} style={{ padding: '1rem', textAlign: 'center' }}>
+              <td colSpan={25 + riskFields.length} style={{ padding: '0.5rem', textAlign: 'center' }}>
                 <button 
                   className="btn" 
-                  style={{ background: 'transparent', border: '1px dashed var(--border)', width: '100%', padding: '0.75rem', color: 'var(--text-muted)' }}
+                  style={{ background: 'transparent', border: '1px dashed var(--border)', width: '100%', padding: '0.4rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}
                   onClick={handleCreateNewRisk}
                 >
                   + Click to add a new row

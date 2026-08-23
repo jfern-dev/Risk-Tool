@@ -1,6 +1,4 @@
 import { app, BrowserWindow, ipcMain, dialog, Menu, shell } from 'electron';
-import pkg from 'electron-updater';
-const { autoUpdater } = pkg;
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
@@ -60,16 +58,20 @@ app.on('will-quit', () => cleanupWorkDir());
 
 const autoSaveToTemp = async () => {
   try {
-    const riskData = {
-      risks: appData.risks,
-      fields: appData.fields,
-      snapshots: appData.snapshots,
+    const configData = {
       dashboardSettings: appData.dashboardSettings,
-      simulationCache: appData.simulationCache
+      briefingConfig: appData.briefingConfig || { selectedItems: [], layout: [] }
     };
-    await fs.writeFile(path.join(workDir, 'data.json'), JSON.stringify(riskData, null, 2), 'utf-8');
-    await fs.writeFile(path.join(workDir, 'schedule.json'), JSON.stringify(appData.schedule || { tasks: [], dependencies: [] }, null, 2), 'utf-8');
-    await fs.writeFile(path.join(workDir, 'mapping.json'), JSON.stringify(appData.mapping || [], null, 2), 'utf-8');
+    const adminData = {
+      fields: appData.fields,
+      snapshots: appData.snapshots
+    };
+    await fs.writeFile(path.join(workDir, 'Config.json'), JSON.stringify(configData, null, 2), 'utf-8');
+    await fs.writeFile(path.join(workDir, 'Admin.json'), JSON.stringify(adminData, null, 2), 'utf-8');
+    await fs.writeFile(path.join(workDir, 'RIO.json'), JSON.stringify(appData.risks || [], null, 2), 'utf-8');
+    await fs.writeFile(path.join(workDir, 'Schedule.json'), JSON.stringify(appData.schedule || { tasks: [], dependencies: [] }, null, 2), 'utf-8');
+    await fs.writeFile(path.join(workDir, 'RIO-Schedule.json'), JSON.stringify(appData.mapping || [], null, 2), 'utf-8');
+    await fs.writeFile(path.join(workDir, 'Monte-Carlo.json'), JSON.stringify(appData.simulationCache || null, null, 2), 'utf-8');
   } catch (error) {
     console.error('Error auto-saving to temp:', error);
   }
@@ -80,74 +82,61 @@ const handleSave = async (isSaveAs = false) => {
   if (!currentFilePath || isSaveAs) {
     console.log('Prompting save dialog...');
     const result = await dialog.showSaveDialog(mainWindow, {
-      title: 'Save ERM Data',
-      defaultPath: currentFilePath || 'erm-data.erm',
-      filters: [
-        { name: 'ERM Encrypted Files', extensions: ['erm', 'json'] },
-        { name: 'All Files', extensions: ['*'] }
-      ]
+      title: 'Save Workspace',
+      defaultPath: currentFilePath || 'risk-workspace.erm',
+      filters: [{ name: 'ERM Workspace File', extensions: ['erm'] }]
     });
-    console.log('Save dialog result:', result);
     if (result.canceled || !result.filePath) return false;
     currentFilePath = result.filePath;
   }
   
+  console.log('Saving to:', currentFilePath);
+  await autoSaveToTemp();
+
+  const zip = new AdmZip();
+  // We include all json files and the attachment directory
+  zip.addLocalFile(path.join(workDir, 'Config.json'));
+  zip.addLocalFile(path.join(workDir, 'Admin.json'));
+  zip.addLocalFile(path.join(workDir, 'RIO.json'));
+  zip.addLocalFile(path.join(workDir, 'Schedule.json'));
+  zip.addLocalFile(path.join(workDir, 'RIO-Schedule.json'));
+  zip.addLocalFile(path.join(workDir, 'Monte-Carlo.json'));
+  
   try {
-    console.log('Auto saving to temp...', workDir);
-    await autoSaveToTemp();
-    
-    console.log('Creating zip at:', currentFilePath);
-    const zip = new AdmZip();
-    zip.addLocalFolder(workDir);
-    zip.writeZip(currentFilePath);
-    console.log('Zip write complete');
-    
-    mainWindow.setTitle(`Risk Tool - ${path.basename(currentFilePath)}`);
-    return true;
-  } catch (error) {
-    console.error('Save error thrown:', error);
-    dialog.showErrorBox('Save Error', `Could not save file: ${error.message}`);
-    return false;
+    const attachmentDir = path.join(workDir, 'attachments');
+    const attachments = await fs.readdir(attachmentDir);
+    if (attachments.length > 0) {
+      zip.addLocalFolder(attachmentDir, 'attachment'); // The request specified "attachment"
+    }
+  } catch (e) {
+    console.log('No attachments dir, skipping.');
   }
+  
+  zip.writeZip(currentFilePath);
+  mainWindow.setTitle(`Risk Tool - ${path.basename(currentFilePath)}`);
+  
+  return true;
 };
 
-const handleOpenFile = async () => {
-  const result = await dialog.showOpenDialog(mainWindow, {
-    title: 'Open ERM Data',
-    filters: [
-      { name: 'ERM Data Files', extensions: ['erm', 'json'] },
-      { name: 'All Files', extensions: ['*'] }
-    ],
-    properties: ['openFile']
-  });
-  if (!result.canceled && result.filePaths.length > 0) {
-    try {
+const handleOpenFile = async (filePath = null) => {
+  if (!filePath) {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Open Workspace',
+      filters: [
+        { name: 'Workspace Files', extensions: ['erm', 'json'] },
+        { name: 'All Files', extensions: ['*'] }
+      ],
+      properties: ['openFile']
+    });
+    if (result.canceled || result.filePaths.length === 0) return false;
+    filePath = result.filePaths[0];
+  }
 
-      const filePath = result.filePaths[0];
-      await initWorkDir();
-      
-      let isZip = false;
-      try {
+  try {
+    await initWorkDir();
 
-        const zip = new AdmZip(filePath);
-        zip.extractAllTo(workDir, true);
-        isZip = true;
-      } catch (e) {
-        isZip = false;
-      }
-      
-      let dataStr;
-      let scheduleStr = '{"tasks":[],"dependencies":[]}';
-      let mappingStr = '[]';
-
-      if (isZip) {
-        dataStr = await fs.readFile(path.join(workDir, 'data.json'), 'utf-8');
-        try { scheduleStr = await fs.readFile(path.join(workDir, 'schedule.json'), 'utf-8'); } catch (e) {}
-        try { mappingStr = await fs.readFile(path.join(workDir, 'mapping.json'), 'utf-8'); } catch (e) {}
-      } else {
-        dataStr = await fs.readFile(filePath, 'utf-8');
-      }
-      
+    if (filePath.endsWith('.json')) {
+      const dataStr = await fs.readFile(filePath, 'utf-8');
       const parsed = JSON.parse(dataStr);
       appData = {
         risks: parsed.risks || [],
@@ -155,10 +144,77 @@ const handleOpenFile = async () => {
         snapshots: parsed.snapshots || [],
         dashboardSettings: parsed.dashboardSettings || { hiddenFields: [] },
         simulationCache: parsed.simulationCache || null,
-        schedule: JSON.parse(scheduleStr),
-        mapping: JSON.parse(mappingStr)
+        schedule: parsed.schedule || { tasks: [], dependencies: [] },
+        mapping: parsed.mapping || [],
+        briefingConfig: parsed.briefingConfig || { selectedItems: [], layout: [] }
       };
-      if (!appData.dashboardSettings.picklists) {
+      // We also auto-save these to temp files
+      await autoSaveToTemp();
+    } else {
+      let isZip = true;
+      const zip = new AdmZip(filePath);
+      try {
+        zip.extractAllTo(workDir, true);
+        
+        // Handle migration from attachments -> attachment folder naming
+        try {
+          const legacyAttachmentDir = path.join(workDir, 'attachments');
+          const newAttachmentDir = path.join(workDir, 'attachment');
+          const stat = await fs.stat(newAttachmentDir).catch(()=>null);
+          if (stat && stat.isDirectory()) {
+            await fs.rename(newAttachmentDir, legacyAttachmentDir).catch(()=>null); // We rename to attachments internally for temp dir
+          }
+        } catch (e) {}
+
+      } catch (e) {
+        isZip = false;
+      }
+      
+      let configStr = '{}', adminStr = '{}', rioStr = '[]', scheduleStr = '{"tasks":[],"dependencies":[]}', mappingStr = '[]', mcStr = 'null';
+
+      if (isZip) {
+        // Read new format if they exist
+        try { configStr = await fs.readFile(path.join(workDir, 'Config.json'), 'utf-8'); } catch (e) {
+          // Fallback to data.json
+          try { 
+             const oldData = await fs.readFile(path.join(workDir, 'data.json'), 'utf-8'); 
+             const p = JSON.parse(oldData);
+             configStr = JSON.stringify({ dashboardSettings: p.dashboardSettings, briefingConfig: p.briefingConfig || {} });
+             adminStr = JSON.stringify({ fields: p.fields, snapshots: p.snapshots });
+             rioStr = JSON.stringify(p.risks || []);
+             mcStr = JSON.stringify(p.simulationCache || null);
+          } catch (ee) {}
+        }
+        try { adminStr = await fs.readFile(path.join(workDir, 'Admin.json'), 'utf-8'); } catch (e) {}
+        try { rioStr = await fs.readFile(path.join(workDir, 'RIO.json'), 'utf-8'); } catch (e) {}
+        try { scheduleStr = await fs.readFile(path.join(workDir, 'Schedule.json'), 'utf-8'); } catch (e) {
+          try { scheduleStr = await fs.readFile(path.join(workDir, 'schedule.json'), 'utf-8'); } catch (ee) {}
+        }
+        try { mappingStr = await fs.readFile(path.join(workDir, 'RIO-Schedule.json'), 'utf-8'); } catch (e) {
+          try { mappingStr = await fs.readFile(path.join(workDir, 'mapping.json'), 'utf-8'); } catch (ee) {}
+        }
+        try { mcStr = await fs.readFile(path.join(workDir, 'Monte-Carlo.json'), 'utf-8'); } catch (e) {}
+      } else {
+        const dataStr = await fs.readFile(filePath, 'utf-8');
+        const parsed = JSON.parse(dataStr);
+        appData = { ...parsed };
+      }
+      
+      if (isZip) {
+        const configParsed = JSON.parse(configStr);
+        const adminParsed = JSON.parse(adminStr);
+        appData = {
+          dashboardSettings: configParsed.dashboardSettings || { hiddenFields: [] },
+          briefingConfig: configParsed.briefingConfig || { selectedItems: [], layout: [] },
+          fields: adminParsed.fields || [],
+          snapshots: adminParsed.snapshots || [],
+          risks: JSON.parse(rioStr) || [],
+          schedule: JSON.parse(scheduleStr) || { tasks: [], dependencies: [] },
+          mapping: JSON.parse(mappingStr) || [],
+          simulationCache: JSON.parse(mcStr) || null
+        };
+      }
+    }  if (!appData.dashboardSettings.picklists) {
         appData.dashboardSettings.picklists = {
           level: { options: ['Program', 'Internal'], isMultiSelect: false },
           riskCategory: { options: ['Schedule', 'Cost', 'Technical'], isMultiSelect: true },
@@ -174,7 +230,6 @@ const handleOpenFile = async () => {
       dialog.showErrorBox('Open Error', `Could not open file: ${error.message}`);
       return false;
     }
-  }
   return false;
 };
 
@@ -193,7 +248,8 @@ const handleNewFile = async () => {
       }
     },
     schedule: { tasks: [], dependencies: [] },
-    mapping: []
+    mapping: [],
+    briefingConfig: { selectedItems: [], layout: [] }
   };
   currentFilePath = null;
   await initWorkDir();
@@ -405,14 +461,22 @@ ipcMain.handle('api-import-mpp', async () => {
   const scriptsDir = path.join(__dirname, '..', 'scripts').replace('app.asar', 'app.asar.unpacked');
   
   try {
-    const brewJava = '/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home/bin/java';
-    // Fallback to global 'java' if brew java doesn't exist
+    const candidateJavaPaths = [
+      '/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home/bin/java',
+      '/opt/homebrew/bin/java',
+      path.join(os.homedir(), '.sdkman/candidates/java/current/bin/java'),
+      path.join(os.homedir(), '.sdkman/candidates/java/21.0.2-tem/bin/java'),
+      '/usr/bin/java'
+    ];
     let javaExec = 'java';
-    try {
-      await fs.stat(brewJava);
-      javaExec = brewJava;
-    } catch (e) {
-      // Ignored, fallback to 'java'
+    for (const candidate of candidateJavaPaths) {
+      try {
+        await fs.stat(candidate);
+        javaExec = candidate;
+        break;
+      } catch (e) {
+        // continue searching
+      }
     }
     
     // Classpath must include the lib folder jars and the scripts dir
@@ -481,6 +545,12 @@ ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => 
           handlingStrategy: { options: ['Accept', 'Decline', 'Transfer', 'Mitigate/Execute'], isMultiSelect: false }
         };
       }
+      if (!appData.dashboardSettings.calendar) {
+        appData.dashboardSettings.calendar = {
+          includeWeekends: false,
+          holidays: []
+        };
+      }
       if (!appData.dashboardSettings.probabilityMapping) {
         appData.dashboardSettings.probabilityMapping = { 
           1: { min: 1, max: 20 }, 
@@ -488,6 +558,15 @@ ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => 
           3: { min: 41, max: 60 }, 
           4: { min: 61, max: 80 }, 
           5: { min: 81, max: 99 } 
+        };
+      }
+      if (!appData.dashboardSettings.enabledModules) {
+        appData.dashboardSettings.enabledModules = {
+          rio: true,
+          monteCarlo: true,
+          schedule: false,
+          briefing: false,
+          briefingAdmin: false
         };
       }
       return appData.dashboardSettings;
@@ -536,6 +615,18 @@ ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => 
       appData.simulationCache = body;
       await autoSaveToTemp();
       return appData.simulationCache;
+    }
+
+    // GET /api/snapshots
+    if (reqPath === '/api/briefingConfig' && method === 'GET') {
+      return appData.briefingConfig || { selectedItems: [], layout: [] };
+    }
+
+    // PUT /api/briefingConfig
+    if (reqPath === '/api/briefingConfig' && method === 'PUT') {
+      appData.briefingConfig = body;
+      await autoSaveToTemp();
+      return appData.briefingConfig;
     }
 
     // GET /api/snapshots
@@ -597,7 +688,16 @@ ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => 
       };
       risk.snapshots.push(newSnapshot);
       await autoSaveToTemp();
-      return newSnapshot;
+      return risk;
+    }
+
+    // GET /api/risks/:id/snapshots
+    match = reqPath.match(/^\/api\/risks\/(\d+)\/snapshots$/);
+    if (match && method === 'GET') {
+      const riskId = parseInt(match[1]);
+      const risk = appData.risks.find(r => r.id === riskId);
+      if (!risk) throw new Error('Risk not found');
+      return risk.snapshots || [];
     }
 
     // PUT /api/risks/:id
@@ -664,6 +764,25 @@ ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => 
       return { customFields: risk.customFields };
     }
 
+    // POST /api/risks/:id/status-logs
+    match = reqPath.match(/^\/api\/risks\/(\d+)\/status-logs$/);
+    if (match && method === 'POST') {
+      const id = parseInt(match[1]);
+      const risk = appData.risks.find(r => r.id === id);
+      if (!risk) throw new Error('Risk not found');
+      if (!risk.statusLogs) risk.statusLogs = [];
+      const newLog = {
+        id: generateId(risk.statusLogs),
+        date: new Date().toISOString(),
+        status: body.status,
+        takeaways: body.takeaways,
+        challenges: body.challenges
+      };
+      risk.statusLogs.push(newLog);
+      await autoSaveToTemp();
+      return newLog;
+    }
+
     // DELETE /api/risks/:id
     match = reqPath.match(/^\/api\/risks\/(\d+)$/);
     if (match && method === 'DELETE') {
@@ -671,6 +790,9 @@ ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => 
       const idx = appData.risks.findIndex(r => r.id === id);
       if (idx === -1) throw new Error('Risk not found');
       appData.risks.splice(idx, 1);
+      if (appData.mapping) {
+        appData.mapping = appData.mapping.filter(m => m.riskId !== id);
+      }
       await autoSaveToTemp();
       return { success: true };
     }

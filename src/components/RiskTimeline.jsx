@@ -2,15 +2,18 @@ import React from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Legend
 } from 'recharts';
-import { format } from 'date-fns';
 
-const RiskTimeline = ({ risk, isPrint = false }) => {
-  if (!risk.burndownSteps || risk.burndownSteps.length === 0) {
-    return null;
+const RiskTimeline = ({ risk, isPrint = false, height, showHeader = true }) => {
+  if (!risk || !risk.burndownSteps || risk.burndownSteps.length === 0) {
+    return (
+      <div style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)', fontSize: '0.85rem', border: '1px dashed var(--border)', borderRadius: '6px', height: height || '100%', minHeight: '120px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        No action plan established for this item yet.
+      </div>
+    );
   }
 
   // Initial score from DB
-  const initialDate = (risk.discoveredDate ? new Date(risk.discoveredDate) : new Date(risk.createdAt)).getTime();
+  const initialDate = (risk.discoveredDate ? new Date(risk.discoveredDate) : new Date(risk.createdAt || Date.now())).getTime();
   let initialL = risk.initialLikelihood;
   let initialI = risk.initialImpact;
 
@@ -39,19 +42,17 @@ const RiskTimeline = ({ risk, isPrint = false }) => {
   }));
 
   const today = new Date().getTime();
-  const allEvents = [...targetEvents, ...actualEvents, {
-    date: today,
-    isTarget: false,
-    isActual: false,
-    isTodayMarker: true,
-    step: { description: 'Today' }
-  }].sort((a, b) => a.date - b.date);
+  const allEvents = [...targetEvents, ...actualEvents].sort((a, b) => a.date - b.date);
+  
+  // Ensure the initial point is chronologically before or equal to the earliest event
+  const earliestEventDate = allEvents.length > 0 ? allEvents[0].date : initialDate;
+  const chartStartDate = Math.min(initialDate, earliestEventDate - (1000 * 60 * 60 * 24)); // 1 day before earliest event if initialDate is later
   
   const points = [];
   
   // Initial point
   points.push({
-    date: initialDate,
+    date: chartStartDate,
     targetScore: currentTargetL * currentTargetI,
     actualScore: initialL * initialI,
     label: 'Identified',
@@ -74,14 +75,10 @@ const RiskTimeline = ({ risk, isPrint = false }) => {
       date: event.date,
       targetScore: currentTargetL * currentTargetI,
       actualScore: event.date > today ? null : currentActualL * currentActualI,
-      label: event.step.description,
-      isTargetEvent: event.isTarget || false,
-      isActualEvent: event.isActual || false,
-      isTodayMarker: event.isTodayMarker || false,
+      event: event.step.description,
+      isProjected: event.isTarget || false,
     });
   });
-
-  // Today marker is now injected chronologically above
 
   const formatXAxis = (tickItem) => {
     return new Date(tickItem).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' });
@@ -149,15 +146,17 @@ const RiskTimeline = ({ risk, isPrint = false }) => {
   );
 
   return (
-    <div style={{ height: '220px', width: '100%', marginTop: '1.5rem', marginBottom: '0.5rem' }}>
-      <h5 style={{ margin: '0 0 1rem 0', color: 'var(--text-muted)', fontSize: '0.9rem' }}>Burndown Timeline</h5>
-      {isPrint ? (
-        ChartContent
-      ) : (
-        <ResponsiveContainer width="100%" height="100%">
-          {ChartContent}
-        </ResponsiveContainer>
-      )}
+    <div style={{ height: height || '220px', width: '100%', marginTop: showHeader ? '0.5rem' : '0', marginBottom: '0.5rem', display: 'flex', flexDirection: 'column' }}>
+      {showHeader && <h5 style={{ margin: '0 0 0.5rem 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Burndown Timeline</h5>}
+      <div style={{ flex: 1, width: '100%', minHeight: 0 }}>
+        {isPrint ? (
+          ChartContent
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            {ChartContent}
+          </ResponsiveContainer>
+        )}
+      </div>
     </div>
   );
 };

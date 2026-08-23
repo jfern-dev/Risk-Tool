@@ -4,11 +4,10 @@ import RiskTimeline from './RiskTimeline';
 import { apiFetch } from '../utils/api';
 
 const PdfReport = ({ risks }) => {
-  const [dashboardSettings, setDashboardSettings] = useState(null);
   const [hiddenFields, setHiddenFields] = useState([]);
 
   useEffect(() => {
-    apiFetch('http://localhost:3000/api/dashboardSettings')
+    apiFetch('/api/dashboardSettings')
       .then(res => res.json())
       .then(data => {
         if (data) {
@@ -69,6 +68,7 @@ const PdfReport = ({ risks }) => {
                 {/* Configurable/Dynamic Fields */}
                 <div style={{ borderTop: '1px solid #ddd', paddingTop: '10px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   {[
+                    { id: 'closureCriteria', label: 'Closure Criteria', value: risk.closureCriteria, fullWidth: true },
                     { id: 'gpocs', label: 'GPOCs', value: risk.gpocs },
                     { id: 'cpocs', label: 'CPOCs', value: risk.cpocs }
                   ].map(field => {
@@ -91,7 +91,8 @@ const PdfReport = ({ risks }) => {
                   <RiskMatrix 
                     risks={[risk]}
                     activeType={currentItemType}
-                    hideIds={false}
+                    showMarkers={true}
+                    showCounts={false}
                     isPrint={true}
                   />
                 </div>

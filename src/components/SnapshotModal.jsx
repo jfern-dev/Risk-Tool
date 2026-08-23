@@ -21,15 +21,19 @@ const SnapshotModal = ({ onClose, onSave, title = "Create Snapshot" }) => {
 
   return (
     <div className="modal-overlay">
-      <div className="modal-content card" style={{ maxWidth: '400px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-          <h2 style={{ margin: 0, fontSize: '1.25rem' }}>{title}</h2>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
-            <X size={20} />
-          </button>
+      <div className="modal-content card" style={{ maxWidth: '450px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', gap: '0.75rem' }}>
+          <h2 style={{ margin: 0, fontSize: '1.2rem', whiteSpace: 'nowrap' }}>{title}</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexShrink: 0 }}>
+            <button type="button" onClick={onClose} className="btn" style={{ background: 'transparent', color: 'var(--text)', border: '1px solid var(--border)', padding: '0.3rem 0.65rem', fontSize: '0.85rem' }}>Cancel</button>
+            <button type="submit" form="snapshot-form" className="btn btn-primary" style={{ padding: '0.3rem 0.75rem', fontSize: '0.85rem' }} disabled={saving || !note.trim()}>{saving ? 'Saving...' : 'Save'}</button>
+            <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px' }}>
+              <X size={20} />
+            </button>
+          </div>
         </div>
         
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <form id="snapshot-form" onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
           <div>
             <label className="form-label">Snapshot Note</label>
             <input 
@@ -41,10 +45,6 @@ const SnapshotModal = ({ onClose, onSave, title = "Create Snapshot" }) => {
               onChange={e => setNote(e.target.value)}
               required
             />
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.5rem' }}>
-            <button type="button" onClick={onClose} className="btn" style={{ background: 'transparent', color: 'var(--text)', border: '1px solid var(--border)' }}>Cancel</button>
-            <button type="submit" className="btn" disabled={saving || !note.trim()}>{saving ? 'Saving...' : 'Save Snapshot'}</button>
           </div>
         </form>
       </div>

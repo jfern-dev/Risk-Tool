@@ -29,7 +29,7 @@ const StatusLogModal = ({ risk, onClose, onRiskUpdated }) => {
 
       const updatedRisk = { ...risk, statusLogs: newLogs };
 
-      const response = await apiFetch(`http://localhost:3000/api/risks/${risk.id}`, {
+      const response = await apiFetch(`/api/risks/${risk.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedRisk)
@@ -52,22 +52,29 @@ const StatusLogModal = ({ risk, onClose, onRiskUpdated }) => {
 
   return (
     <div className="modal-overlay">
-      <div className="modal-content card" style={{ maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-          <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Clock size={24} color="var(--primary)" />
+      <div className="modal-content card" style={{ maxWidth: '600px', maxHeight: '92vh', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', gap: '1rem' }}>
+          <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.25rem' }}>
+            <Clock size={20} color="var(--primary)" />
             Status Logs: {risk.title}
           </h2>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
-            <X size={24} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+            {!isAdding && (
+              <button onClick={() => setIsAdding(true)} className="btn btn-primary" style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem' }}>
+                <PlusCircle size={14} style={{ marginRight: '4px' }} /> Add Log
+              </button>
+            )}
+            <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px' }}>
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
-        {isAdding ? (
-          <form onSubmit={handleAddLog} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', background: 'rgba(15, 23, 42, 0.5)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--primary)', marginBottom: '2rem' }}>
+        {isAdding && (
+          <form onSubmit={handleAddLog} style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', background: 'rgba(15, 23, 42, 0.5)', padding: '0.75rem', borderRadius: '6px', border: '1px solid var(--primary)', marginBottom: '1rem' }}>
             <div>
               <label className="form-label">Status Update</label>
-              <textarea required className="form-input" rows="3" value={status} onChange={e => setStatus(e.target.value)} placeholder="Current status..." />
+              <textarea required className="form-input" rows="2" value={status} onChange={e => setStatus(e.target.value)} placeholder="Current status..." />
             </div>
             <div>
               <label className="form-label">Key Takeaways</label>
@@ -78,19 +85,13 @@ const StatusLogModal = ({ risk, onClose, onRiskUpdated }) => {
               <textarea className="form-input" rows="2" value={challenges} onChange={e => setChallenges(e.target.value)} placeholder="Blockers or challenges..." />
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-              <button type="button" onClick={() => setIsAdding(false)} className="btn" style={{ background: 'transparent', color: 'var(--text)', border: '1px solid var(--border)' }}>Cancel</button>
-              <button type="submit" className="btn" disabled={loading}>{loading ? 'Saving...' : 'Save Log'}</button>
+              <button type="button" onClick={() => setIsAdding(false)} className="btn" style={{ background: 'transparent', color: 'var(--text)', border: '1px solid var(--border)', padding: '0.3rem 0.65rem', fontSize: '0.85rem' }}>Cancel</button>
+              <button type="submit" className="btn" style={{ padding: '0.3rem 0.75rem', fontSize: '0.85rem' }} disabled={loading}>{loading ? 'Saving...' : 'Save Log'}</button>
             </div>
           </form>
-        ) : (
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1.5rem' }}>
-            <button onClick={() => setIsAdding(true)} className="btn">
-              <PlusCircle size={16} style={{ marginRight: '0.5rem' }} /> Add New Log
-            </button>
-          </div>
         )}
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
           {(!risk.statusLogs || risk.statusLogs.length === 0) ? (
             <p style={{ color: 'var(--text-muted)', textAlign: 'center', fontStyle: 'italic', marginTop: '2rem' }}>No status logs recorded yet.</p>
           ) : (

@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { apiFetch } from '../utils/api';
 import { calculateCriticalPath } from '../utils/cpm';
 import { calculateTaskScheduleP80 } from '../utils/mcEngine';
+import { formatDate } from '../utils/calendar';
 
 const defaultProbMapping = {
   1: { min: 1, max: 20 },
@@ -17,14 +18,13 @@ const ScheduleView = () => {
   const [mappings, setMappings] = useState([]);
   const [dashboardSettings, setDashboardSettings] = useState({});
   const [activeTab, setActiveTab] = useState('data');
-  const [cpmData, setCpmData] = useState(null);
-  const [riskCpmData, setRiskCpmData] = useState(null);
   const [targetTaskId, setTargetTaskId] = useState('');
   const [mcIterations, setMcIterations] = useState(1000);
   const [primaryView, setPrimaryView] = useState('risk-adjusted');
   const [filterCritical, setFilterCritical] = useState(false);
-  const [error, setError] = useState(null);
-  
+  const [hideSummaryTasks, setHideSummaryTasks] = useState(false);
+  const [collapsedTasks, setCollapsedTasks] = useState({});
+
   // Mapping Modal State
   const [isMappingModalOpen, setIsMappingModalOpen] = useState(false);
   const [mappingActiveTaskId, setMappingActiveTaskId] = useState(null);
@@ -34,104 +34,237 @@ const ScheduleView = () => {
     loadSchedule();
   }, []);
 
-  useEffect(() => {
-    if (schedule && schedule.tasks && schedule.tasks.length > 0) {
-      try {
-        // Prepare tasks with risk-adjusted durations
-        const probMap = dashboardSettings?.probabilityMapping || defaultProbMapping;
-        
-        const preparedTasks = schedule.tasks.map(t => {
-          const mapping = mappings.find(m => m.taskId === t.id);
-          let riskDelay = 0;
-          if (mapping && mapping.riskIds && mapping.riskIds.length > 0) {
-            const mappedRisks = mapping.riskIds.map(rid => risks.find(r => r.id === rid)).filter(Boolean);
-            riskDelay = calculateTaskScheduleP80(mappedRisks, probMap, mcIterations);
-          }
-          return {
-            ...t,
-            riskDuration: (parseFloat(t.duration) || 0) + riskDelay
-          };
-        });
-
-        const baseResult = calculateCriticalPath(preparedTasks, schedule.dependencies || [], targetTaskId || null, false);
-        const riskResult = calculateCriticalPath(preparedTasks, schedule.dependencies || [], targetTaskId || null, true);
-        
-        if (baseResult.error) {
-          setError(baseResult.error);
-        } else {
-          setCpmData(baseResult);
-          setRiskCpmData(riskResult);
-          setError(null);
-        }
-      } catch (err) {
-        setError('Failed to calculate Critical Path.');
-      }
-    }
-  }, [schedule, targetTaskId, mappings, risks, dashboardSettings, mcIterations]);
-
   const loadSchedule = async () => {
     try {
       const [scheduleRes, mappingRes, risksRes, settingsRes] = await Promise.all([
-        apiFetch('http://localhost:3000/api/schedule'),
-        apiFetch('http://localhost:3000/api/mapping').catch(() => []),
-        apiFetch('http://localhost:3000/api/risks').catch(() => []),
-        apiFetch('http://localhost:3000/api/dashboardSettings').catch(() => [])
+        apiFetch('/api/schedule'),
+        apiFetch('/api/mapping').catch(() => []),
+        apiFetch('/api/risks').catch(() => []),
+        apiFetch('/api/dashboardSettings').catch(() => [])
       ]);
       const data = await scheduleRes.json();
       setSchedule(data || { tasks: [], dependencies: [] });
-      
+
       let mapData = [];
-      try { mapData = await mappingRes.json(); } catch(e) {}
+      try { mapData = await mappingRes.json(); } catch (e) { console.error('JSON parse error', e); }
       setMappings(Array.isArray(mapData) ? mapData : []);
-      
+
       let riskData = [];
-      try { riskData = await risksRes.json(); } catch(e) {}
+      try { riskData = await risksRes.json(); } catch (e) { console.error('JSON parse error', e); }
       setRisks(Array.isArray(riskData) ? riskData : []);
-      
+
       let settingsData = {};
-      try { settingsData = await settingsRes.json(); } catch(e) {}
+      try { settingsData = await settingsRes.json(); } catch (e) { console.error('JSON parse error', e); }
       setDashboardSettings(settingsData || {});
-      
     } catch (err) {
       console.error('Failed to load schedule data:', err);
     }
   };
 
+  // Fast O(1) risk lookup map per task
+  const taskRiskMap = useMemo(() => {
+    const map = new Map();
+    const riskLookup = new Map();
+    (risks || []).forEach(r => {
+      riskLookup.set(String(r.id), r);
+      if (r.userRiskId) riskLookup.set(String(r.userRiskId), r);
+    });
+
+    (mappings || []).forEach(m => {
+      const mappedRisk = riskLookup.get(String(m.riskId));
+      if (!mappedRisk) return;
+
+      const uuids = m.taskUuids && Array.isArray(m.taskUuids)
+        ? m.taskUuids
+        : (m.taskId ? [String(m.taskId)] : []);
+
+      uuids.forEach(uid => {
+        if (!uid) return;
+        const key = String(uid);
+        if (!map.has(key)) map.set(key, []);
+        if (!map.get(key).some(r => r.id === mappedRisk.id)) {
+          map.get(key).push(mappedRisk);
+        }
+      });
+    });
+    return map;
+  }, [mappings, risks]);
+
+  const getMappedRisksForTask = useCallback((task) => {
+    if (!task) return [];
+    const taskUuid = String(task.uuid || task.id);
+    const taskId = String(task.id);
+    const fromUuid = taskRiskMap.get(taskUuid) || [];
+    const fromId = taskRiskMap.get(taskId) || [];
+    const combined = [...fromUuid, ...fromId];
+    const unique = [];
+    const seen = new Set();
+    combined.forEach(r => {
+      if (!seen.has(r.id)) {
+        seen.add(r.id);
+        unique.push(r);
+      }
+    });
+    return unique;
+  }, [taskRiskMap]);
+
+  // Memoized CPM calculation
+  const { cpmData, riskCpmData, cpmError } = useMemo(() => {
+    if (!schedule || !schedule.tasks || schedule.tasks.length === 0) {
+      return { cpmData: null, riskCpmData: null, cpmError: null };
+    }
+
+    try {
+      const probMap = dashboardSettings?.probabilityMapping || defaultProbMapping;
+
+      const preparedTasks = schedule.tasks.map(t => {
+        const mappedRisks = getMappedRisksForTask(t);
+        let riskDelay = 0;
+        if (mappedRisks.length > 0) {
+          riskDelay = calculateTaskScheduleP80(mappedRisks, probMap, mcIterations);
+        }
+        return {
+          ...t,
+          riskDuration: (parseFloat(t.duration) || 0) + riskDelay
+        };
+      });
+
+      let earliestDate = new Date();
+      const validDates = preparedTasks.filter(t => t.start).map(t => new Date(t.start)).filter(d => !isNaN(d.getTime()));
+      if (validDates.length > 0) {
+        earliestDate = new Date(Math.min(...validDates));
+      }
+
+      const calSettings = dashboardSettings?.calendar || {};
+      const baseResult = calculateCriticalPath(preparedTasks, schedule.dependencies || [], targetTaskId || null, false, earliestDate, calSettings);
+      const riskResult = calculateCriticalPath(preparedTasks, schedule.dependencies || [], targetTaskId || null, true, earliestDate, calSettings);
+
+      return {
+        cpmData: baseResult.error ? null : baseResult,
+        riskCpmData: riskResult.error ? null : riskResult,
+        cpmError: baseResult.error || riskResult.error || null
+      };
+    } catch (err) {
+      return { cpmData: null, riskCpmData: null, cpmError: 'Failed to calculate Critical Path.' };
+    }
+  }, [schedule, targetTaskId, getMappedRisksForTask, dashboardSettings, mcIterations]);
+
+  const toggleCollapse = (taskId) => {
+    setCollapsedTasks(prev => ({
+      ...prev,
+      [taskId]: !prev[taskId]
+    }));
+  };
+
+  const getVisibleTasks = useCallback((tasksArray) => {
+    const visible = [];
+    let hiddenLevel = null;
+
+    for (const t of (tasksArray || [])) {
+      const level = t.outlineLevel ?? 1;
+      if (hiddenLevel !== null) {
+        if (level > hiddenLevel) {
+          continue;
+        } else {
+          hiddenLevel = null;
+        }
+      }
+
+      if (hideSummaryTasks && t.isSummary) continue;
+
+      visible.push(t);
+
+      if (t.isSummary && collapsedTasks[t.id]) {
+        hiddenLevel = level;
+      }
+    }
+    return visible;
+  }, [hideSummaryTasks, collapsedTasks]);
+
+  // Memoized task arrays for Gantt
+  const showRiskAsSolid = primaryView === 'risk-adjusted';
+  const activeCpmData = showRiskAsSolid ? riskCpmData : cpmData;
+
+  const visibleGanttTasks = useMemo(() => {
+    return getVisibleTasks(riskCpmData?.tasks || []);
+  }, [riskCpmData, getVisibleTasks]);
+
+  const baseTaskMap = useMemo(() => {
+    return new Map((cpmData?.tasks || []).map(t => [String(t.id), t]));
+  }, [cpmData]);
+
+  const activeTaskMap = useMemo(() => {
+    return new Map((activeCpmData?.tasks || []).map(t => [String(t.id), t]));
+  }, [activeCpmData]);
+
+  const displayedGanttTasks = useMemo(() => {
+    if (!filterCritical) return visibleGanttTasks;
+    return visibleGanttTasks.filter(t => {
+      const baseT = baseTaskMap.get(String(t.id)) || t;
+      const activeCriticality = showRiskAsSolid ? t.criticality : baseT.criticality;
+      return activeCriticality > 0;
+    });
+  }, [visibleGanttTasks, filterCritical, baseTaskMap, showRiskAsSolid]);
+
+  const ganttTaskIndexMap = useMemo(() => {
+    return new Map(displayedGanttTasks.map((t, idx) => [String(t.id), idx]));
+  }, [displayedGanttTasks]);
+
   const handleOpenMappingModal = (taskId) => {
     setMappingActiveTaskId(taskId);
-    // Find existing mapping for this task, if any
-    const existing = mappings.find(m => m.taskId === taskId);
-    setMappingTempSelection(existing && Array.isArray(existing.riskIds) ? existing.riskIds : []);
+    const targetTask = schedule.tasks.find(t => String(t.id) === String(taskId));
+    const mappedRisks = getMappedRisksForTask(targetTask || { id: taskId });
+    setMappingTempSelection(mappedRisks.map(r => r.id));
     setIsMappingModalOpen(true);
   };
-  
+
   const handleToggleRiskSelection = (riskId) => {
-    setMappingTempSelection(prev => 
+    setMappingTempSelection(prev =>
       prev.includes(riskId) ? prev.filter(id => id !== riskId) : [...prev, riskId]
     );
   };
-  
+
   const handleSaveMapping = async () => {
     try {
-      // Deep copy to avoid mutating React state
-      const updatedMappings = mappings.map(m => ({ ...m, riskIds: [...m.riskIds] }));
-      const existingIdx = updatedMappings.findIndex(m => m.taskId === mappingActiveTaskId);
-      
-      if (existingIdx >= 0) {
-        updatedMappings[existingIdx] = { ...updatedMappings[existingIdx], riskIds: [...mappingTempSelection] };
-      } else {
-        updatedMappings.push({ taskId: mappingActiveTaskId, riskIds: [...mappingTempSelection] });
-      }
-      
-      // Save to backend
-      const res = await apiFetch('http://localhost:3000/api/mapping', {
+      const targetTask = schedule.tasks.find(t => String(t.id) === String(mappingActiveTaskId));
+      const taskUuid = String(targetTask?.uuid || mappingActiveTaskId);
+
+      let updatedMappings = [...mappings];
+
+      risks.forEach(r => {
+        const isSelected = mappingTempSelection.includes(r.id);
+        const mapIdx = updatedMappings.findIndex(m => m.riskId === r.id);
+
+        if (isSelected) {
+          if (mapIdx >= 0) {
+            const currentUuids = updatedMappings[mapIdx].taskUuids || [];
+            if (!currentUuids.includes(taskUuid)) {
+              updatedMappings[mapIdx] = { ...updatedMappings[mapIdx], riskId: r.id, taskUuids: [...currentUuids, taskUuid] };
+            }
+          } else {
+            updatedMappings.push({ riskId: r.id, taskUuids: [taskUuid] });
+          }
+        } else {
+          if (mapIdx >= 0) {
+            const currentUuids = updatedMappings[mapIdx].taskUuids || [];
+            const filtered = currentUuids.filter(u => u !== taskUuid && u !== String(mappingActiveTaskId));
+            if (filtered.length > 0) {
+              updatedMappings[mapIdx] = { ...updatedMappings[mapIdx], riskId: r.id, taskUuids: filtered };
+            } else {
+              updatedMappings.splice(mapIdx, 1);
+            }
+          }
+        }
+      });
+
+      const res = await apiFetch('/api/mapping', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedMappings)
       });
-      
+
       if (!res.ok) throw new Error('Failed to save mapping');
-      
+
       setMappings(updatedMappings);
       setIsMappingModalOpen(false);
       setMappingActiveTaskId(null);
@@ -146,7 +279,6 @@ const ScheduleView = () => {
         const newSchedule = await window.electron.ipcRenderer.invoke('api-import-mpp');
         if (newSchedule) {
           setSchedule(newSchedule);
-          // CPM is recalculated automatically by the useEffect when schedule changes
         }
       } catch (err) {
         console.error('Import failed', err);
@@ -156,10 +288,10 @@ const ScheduleView = () => {
 
   return (
     <div className="container dashboard-ui">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
         <div>
-          <h2 style={{ margin: '0 0 0.5rem 0', color: 'var(--primary)' }}>Project Schedule</h2>
-          <p style={{ margin: 0, color: 'var(--text-muted)' }}>
+          <h2 style={{ margin: '0 0 0.25rem 0', fontSize: '1.35rem', color: 'var(--primary)' }}>Project Schedule</h2>
+          <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.85rem' }}>
             Import MS Project files to analyze Critical Path and perform schedule risk analysis.
           </p>
         </div>
@@ -170,13 +302,13 @@ const ScheduleView = () => {
 
       {/* Options Row */}
       {schedule?.tasks?.length > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', marginBottom: '1.5rem', background: 'var(--surface-hover)', padding: '12px 16px', borderRadius: '8px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <label style={{ fontWeight: 600, color: 'white' }}>Calculate Critical Path towards:</label>
-            <select 
-              value={targetTaskId} 
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.75rem', background: 'var(--surface-hover)', padding: '8px 12px', borderRadius: '6px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <label style={{ fontWeight: 600, fontSize: '0.825rem', color: 'white' }}>Target:</label>
+            <select
+              value={targetTaskId}
               onChange={(e) => setTargetTaskId(e.target.value)}
-              style={{ padding: '6px 12px', borderRadius: '4px', border: '1px solid var(--border)', background: 'var(--surface)', minWidth: '200px', color: 'white' }}
+              style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--border)', background: 'var(--surface)', minWidth: '160px', color: 'white', fontSize: '0.825rem' }}
             >
               <option value="">-- Project End (Default) --</option>
               {schedule.tasks.map(t => (
@@ -184,62 +316,71 @@ const ScheduleView = () => {
               ))}
             </select>
           </div>
-          
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <label style={{ fontWeight: 600, color: 'white' }}>Monte Carlo Iterations:</label>
-            <select 
-              value={mcIterations} 
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <label style={{ fontWeight: 600, fontSize: '0.825rem', color: 'white' }}>MC Iterations:</label>
+            <select
+              value={mcIterations}
               onChange={(e) => setMcIterations(Number(e.target.value))}
-              style={{ padding: '6px 12px', borderRadius: '4px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'white' }}
+              style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'white', fontSize: '0.825rem' }}
             >
               <option value={1000}>1,000</option>
+              <option value={2000}>2,000</option>
               <option value={5000}>5,000</option>
-              <option value={10000}>10,000</option>
             </select>
           </div>
-          
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <label style={{ fontWeight: 600, color: 'white' }}>Primary Gantt View:</label>
-            <select 
-              value={primaryView} 
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <label style={{ fontWeight: 600, fontSize: '0.825rem', color: 'white' }}>View:</label>
+            <select
+              value={primaryView}
               onChange={(e) => setPrimaryView(e.target.value)}
-              style={{ padding: '6px 12px', borderRadius: '4px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'white' }}
+              style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'white', fontSize: '0.825rem' }}
             >
               <option value="risk-adjusted">Risk-Adjusted (Solid)</option>
               <option value="original">Original Schedule (Solid)</option>
             </select>
           </div>
-          
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', color: 'white', fontWeight: 600 }}>
-              <input 
-                type="checkbox" 
-                checked={filterCritical} 
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', color: 'white', fontWeight: 600, fontSize: '0.825rem' }}>
+              <input
+                type="checkbox"
+                checked={filterCritical}
                 onChange={(e) => setFilterCritical(e.target.checked)}
-                style={{ width: '16px', height: '16px' }}
+                style={{ width: '14px', height: '14px' }}
               />
-              Show Critical Path Only
+              Critical Path Only
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', color: 'white', fontWeight: 600, fontSize: '0.825rem' }}>
+              <input
+                type="checkbox"
+                checked={hideSummaryTasks}
+                onChange={(e) => setHideSummaryTasks(e.target.checked)}
+                style={{ width: '14px', height: '14px' }}
+              />
+              Hide Summaries
             </label>
           </div>
         </div>
       )}
 
-      <div className="tabs" style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid var(--border)', marginBottom: '1.5rem' }}>
-        <button 
+      <div className="tabs" style={{ display: 'flex', gap: '0.75rem', borderBottom: '1px solid var(--border)', marginBottom: '0.75rem' }}>
+        <button
           className={`tab-btn ${activeTab === 'data' ? 'active' : ''}`}
           onClick={() => setActiveTab('data')}
-          style={{ padding: '0.5rem 1rem', background: 'transparent', border: 'none', borderBottom: activeTab === 'data' ? '2px solid var(--primary)' : 'none', color: activeTab === 'data' ? 'var(--primary)' : 'var(--text)', cursor: 'pointer', fontWeight: 600 }}
+          style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem', background: 'transparent', border: 'none', borderBottom: activeTab === 'data' ? '2px solid var(--primary)' : 'none', color: activeTab === 'data' ? 'var(--primary)' : 'var(--text)', cursor: 'pointer', fontWeight: 600 }}
         >
           Data View (Tasks & Links)
         </button>
-        <button 
+        <button
           className={`tab-btn ${activeTab === 'gantt' ? 'active' : ''}`}
           onClick={() => setActiveTab('gantt')}
-          style={{ padding: '0.5rem 1rem', background: 'transparent', border: 'none', borderBottom: activeTab === 'gantt' ? '2px solid var(--primary)' : 'none', color: activeTab === 'gantt' ? 'var(--primary)' : 'var(--text)', cursor: 'pointer', fontWeight: 600 }}
+          style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem', background: 'transparent', border: 'none', borderBottom: activeTab === 'gantt' ? '2px solid var(--primary)' : 'none', color: activeTab === 'gantt' ? 'var(--primary)' : 'var(--text)', cursor: 'pointer', fontWeight: 600 }}
         >
           Gantt Chart
         </button>
-        <button 
+        <button
           className={`tab-btn ${activeTab === 'analysis' ? 'active' : ''}`}
           onClick={() => setActiveTab('analysis')}
           style={{ padding: '0.5rem 1rem', background: 'transparent', border: 'none', borderBottom: activeTab === 'analysis' ? '2px solid var(--primary)' : 'none', color: activeTab === 'analysis' ? 'var(--primary)' : 'var(--text)', cursor: 'pointer', fontWeight: 600 }}
@@ -248,9 +389,9 @@ const ScheduleView = () => {
         </button>
       </div>
 
-      {error && (
+      {cpmError && (
         <div style={{ background: '#fee2e2', color: '#991b1b', padding: '1rem', borderRadius: '4px', marginBottom: '1rem' }}>
-          <strong>Error:</strong> {error}
+          <strong>Error:</strong> {cpmError}
         </div>
       )}
 
@@ -263,61 +404,71 @@ const ScheduleView = () => {
       ) : (
         <>
           {activeTab === 'data' && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.5rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
               <div className="card">
-                <h3 style={{ marginTop: 0 }}>Tasks ({schedule?.tasks?.length || 0})</h3>
-                <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                <h3 style={{ marginTop: 0, fontSize: '1.1rem' }}>Tasks ({schedule?.tasks?.length || 0})</h3>
+                <div style={{ maxHeight: 'calc(100vh - 220px)', overflowY: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.825rem' }}>
                     <thead>
                       <tr style={{ borderBottom: '1px solid var(--border)', textAlign: 'left' }}>
-                        <th style={{ padding: '8px' }}>ID</th>
-                        <th style={{ padding: '8px' }}>Name</th>
-                        <th style={{ padding: '8px' }}>Duration</th>
-                        <th style={{ padding: '8px' }}>Start</th>
-                        <th style={{ padding: '8px' }}>Predecessors</th>
-                        <th style={{ padding: '8px' }}>Mapped Risks</th>
+                        <th style={{ padding: '4px 8px' }}>ID</th>
+                        <th style={{ padding: '4px 8px' }}>Name</th>
+                        <th style={{ padding: '4px 8px' }}>Duration</th>
+                        <th style={{ padding: '4px 8px' }}>Start</th>
+                        <th style={{ padding: '4px 8px' }}>Predecessors</th>
+                        <th style={{ padding: '4px 8px' }}>Mapped Risks</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {(schedule?.tasks || []).map(t => (
-                        <tr key={t.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                          <td style={{ padding: '8px' }}>{t.id}</td>
-                          <td style={{ padding: '8px' }}>{t.name}</td>
-                          <td style={{ padding: '8px' }}>{t.duration} d</td>
-                          <td style={{ padding: '8px', color: 'var(--text-muted)' }}>{t.start ? new Date(t.start).toLocaleDateString() : 'N/A'}</td>
-                          <td style={{ padding: '8px', color: 'var(--text-muted)' }}>
-                            {(schedule?.dependencies || [])
-                              .filter(d => d.target === t.id)
-                              .map(d => `${d.source} (${d.type})`)
-                              .join(', ') || '-'}
-                          </td>
-                          <td style={{ padding: '8px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                                {(() => {
-                                  const mapping = mappings.find(m => m.taskId === t.id);
-                                  const mappedRisks = mapping?.riskIds || [];
-                                  if (mappedRisks.length === 0) return <span style={{ color: 'var(--text-muted)' }}>None</span>;
-                                  return mappedRisks.map(rid => {
-                                    const risk = risks.find(r => r.id === rid);
-                                    return (
-                                      <span key={rid} style={{ background: 'var(--surface-hover)', padding: '2px 8px', borderRadius: '12px', fontSize: '0.8rem', border: '1px solid var(--border)' }} title={risk?.title || 'Unknown Risk'}>
-                                        {rid}
+                      {getVisibleTasks(schedule?.tasks).map(t => {
+                        const mappedRisks = getMappedRisksForTask(t);
+                        return (
+                          <tr key={t.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                            <td style={{ padding: '4px 8px' }}>{t.id}</td>
+                            <td style={{ padding: '4px 8px', paddingLeft: `${(t.outlineLevel ?? 1) * 12}px`, fontWeight: t.isSummary ? 'bold' : 'normal', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              {t.isSummary && (
+                                <button
+                                  onClick={() => toggleCollapse(t.id)}
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, width: '14px', color: 'inherit' }}
+                                >
+                                  {collapsedTasks[t.id] ? '▶' : '▼'}
+                                </button>
+                              )}
+                              {!t.isSummary && <span style={{ width: '14px' }}></span>}
+                              {t.name}
+                            </td>
+                            <td style={{ padding: '4px 8px' }}>{t.duration} d</td>
+                            <td style={{ padding: '4px 8px', color: 'var(--text-muted)' }}>{t.start ? new Date(t.start).toLocaleDateString() : 'N/A'}</td>
+                            <td style={{ padding: '4px 8px', color: 'var(--text-muted)' }}>
+                              {(schedule?.dependencies || [])
+                                .filter(d => String(d.target) === String(t.id))
+                                .map(d => `${d.source} (${d.type})`)
+                                .join(', ') || '-'}
+                            </td>
+                            <td style={{ padding: '4px 8px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <div style={{ display: 'flex', gap: '3px', flexWrap: 'wrap' }}>
+                                  {mappedRisks.length === 0 ? (
+                                    <span style={{ color: 'var(--text-muted)' }}>None</span>
+                                  ) : (
+                                    mappedRisks.map(risk => (
+                                      <span key={risk.id} style={{ background: 'var(--surface-hover)', padding: '1px 6px', borderRadius: '10px', fontSize: '0.75rem', border: '1px solid var(--border)' }} title={risk.title || 'Unknown Risk'}>
+                                        {risk.userRiskId || risk.id}
                                       </span>
-                                    );
-                                  });
-                                })()}
+                                    ))
+                                  )}
+                                </div>
+                                <button
+                                  onClick={() => handleOpenMappingModal(t.id)}
+                                  style={{ background: 'transparent', border: 'none', color: 'var(--primary)', cursor: 'pointer', padding: '2px', textDecoration: 'underline', fontSize: '0.8rem' }}
+                                >
+                                  Edit
+                                </button>
                               </div>
-                              <button 
-                                onClick={() => handleOpenMappingModal(t.id)}
-                                style={{ background: 'transparent', border: 'none', color: 'var(--primary)', cursor: 'pointer', padding: '4px', textDecoration: 'underline', fontSize: '0.85rem' }}
-                              >
-                                Edit
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -330,174 +481,157 @@ const ScheduleView = () => {
               <h3 style={{ marginTop: 0, marginBottom: '1.5rem' }}>Gantt Chart</h3>
               <div style={{ overflowX: 'auto', paddingBottom: '1rem' }}>
                 <div style={{ minWidth: '800px', position: 'relative' }}>
-                  
+
                   {/* Timeline Header */}
                   <div style={{ display: 'flex', borderBottom: '2px solid var(--border)', paddingBottom: '8px', marginBottom: '8px', position: 'relative', height: '24px' }}>
                     <div style={{ width: '250px', flexShrink: 0, fontWeight: 600, paddingLeft: '8px' }}>Task Name</div>
                     <div style={{ flexGrow: 1, position: 'relative' }}>
-                      <div style={{ position: 'absolute', left: '0%', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Day 0</div>
-                      <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Day {Math.round(riskCpmData.projectDuration / 2)}</div>
-                      <div style={{ position: 'absolute', right: '0%', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Day {Math.round(riskCpmData.projectDuration)}</div>
+                      <div style={{ position: 'absolute', left: '0%', fontSize: '0.8rem', color: 'var(--text-muted)' }}>{formatDate(riskCpmData.projectStartDate)}</div>
+                      <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>{formatDate(new Date((riskCpmData.projectStartDate.getTime() + riskCpmData.projectFinishDate.getTime()) / 2))}</div>
+                      <div style={{ position: 'absolute', right: '0%', fontSize: '0.8rem', color: 'var(--text-muted)' }}>{formatDate(riskCpmData.projectFinishDate)}</div>
                     </div>
                   </div>
-                  
+
                   {/* SVG Lines for dependencies (Overlays the flexGrow area) */}
                   <div style={{ position: 'absolute', top: '40px', left: '250px', right: 0, bottom: 0, pointerEvents: 'none', zIndex: 1 }}>
                     <svg style={{ width: '100%', height: '100%', overflow: 'visible' }}>
-                      {(() => {
-                        const showRiskAsSolid = primaryView === 'risk-adjusted';
-                        const activeCpmData = showRiskAsSolid ? riskCpmData : cpmData;
-                        
-                        const displayedTasks = riskCpmData.tasks.filter(t => {
-                          if (!filterCritical) return true;
-                          const baseT = cpmData.tasks.find(x => x.id === t.id) || t;
-                          const activeCriticality = showRiskAsSolid ? t.criticality : baseT.criticality;
-                          return activeCriticality > 0;
-                        });
+                      {(schedule?.dependencies || []).map((d, i) => {
+                        const sTask = activeTaskMap.get(String(d.source));
+                        const tTask = activeTaskMap.get(String(d.target));
+                        if (!sTask || !tTask) return null;
 
-                        return (schedule?.dependencies || []).map((d, i) => {
-                          const sTask = activeCpmData.tasks.find(t => t.id === d.source);
-                          const tTask = activeCpmData.tasks.find(t => t.id === d.target);
-                          if (!sTask || !tTask) return null;
-                          
-                          const sIndex = displayedTasks.findIndex(t => t.id === d.source);
-                          const tIndex = displayedTasks.findIndex(t => t.id === d.target);
-                          
-                          if (sIndex === -1 || tIndex === -1) return null;
-                          
-                          let pathLevel = null;
-                          if (sTask.criticality === 1 && tTask.criticality === 1 && sTask.earlyFinish === tTask.earlyStart) pathLevel = 1;
-                          else if (sTask.criticality === 2 && tTask.criticality === 2 && sTask.earlyFinish === tTask.earlyStart) pathLevel = 2;
-                          else if (sTask.criticality === 3 && tTask.criticality === 3 && sTask.earlyFinish === tTask.earlyStart) pathLevel = 3;
-                          
-                          // Right edge of predecessor
-                          const x1 = (sTask.earlyFinish / (riskCpmData.projectDuration || 1)) * 100;
-                          const y1 = (sIndex * 40) + 16;
-                          
-                          // Left edge of successor
-                          const x2 = (tTask.earlyStart / (riskCpmData.projectDuration || 1)) * 100;
-                          const y2 = (tIndex * 40) + 16;
-                          
-                          const strokeColor = pathLevel === 1 ? 'var(--danger)' : 
-                                              pathLevel === 2 ? '#f97316' : // orange
-                                              pathLevel === 3 ? '#eab308' : // yellow
-                                              '#cbd5e1';
-                          
-                          return (
-                            <line 
-                              key={`dep-${i}`} 
-                              x1={`${x1}%`} y1={y1} 
-                              x2={`${x2}%`} y2={y2} 
-                              stroke={strokeColor} 
-                              strokeWidth={pathLevel ? 2 : 1}
-                              opacity={pathLevel ? 1 : 0.6}
-                            />
-                          );
-                        });
-                      })()}
+                        const sIndex = ganttTaskIndexMap.get(String(d.source));
+                        const tIndex = ganttTaskIndexMap.get(String(d.target));
+
+                        if (sIndex === undefined || tIndex === undefined) return null;
+
+                        let pathLevel = null;
+                        if (sTask.criticality === 1 && tTask.criticality === 1 && sTask.earlyFinish === tTask.earlyStart) pathLevel = 1;
+                        else if (sTask.criticality === 2 && tTask.criticality === 2 && sTask.earlyFinish === tTask.earlyStart) pathLevel = 2;
+                        else if (sTask.criticality === 3 && tTask.criticality === 3 && sTask.earlyFinish === tTask.earlyStart) pathLevel = 3;
+
+                        const x1 = (sTask.earlyFinish / (riskCpmData.projectDuration || 1)) * 100;
+                        const y1 = (sIndex * 40) + 16;
+
+                        const x2 = (tTask.earlyStart / (riskCpmData.projectDuration || 1)) * 100;
+                        const y2 = (tIndex * 40) + 16;
+
+                        const strokeColor = pathLevel === 1 ? 'var(--danger)' :
+                          pathLevel === 2 ? '#f97316' :
+                          pathLevel === 3 ? '#eab308' :
+                          '#cbd5e1';
+
+                        return (
+                          <line
+                            key={`dep-${i}`}
+                            x1={`${x1}%`} y1={y1}
+                            x2={`${x2}%`} y2={y2}
+                            stroke={strokeColor}
+                            strokeWidth={pathLevel ? 2 : 1}
+                            opacity={pathLevel ? 1 : 0.6}
+                          />
+                        );
+                      })}
                     </svg>
                   </div>
 
                   {/* Task Rows */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', position: 'relative', zIndex: 2 }}>
-                    {(() => {
-                      const showRiskAsSolid = primaryView === 'risk-adjusted';
-                      const displayedTasks = riskCpmData.tasks.filter(t => {
-                        if (!filterCritical) return true;
-                        const baseT = cpmData.tasks.find(x => x.id === t.id) || t;
-                        const activeCriticality = showRiskAsSolid ? t.criticality : baseT.criticality;
-                        return activeCriticality > 0;
-                      });
-                      
-                      return displayedTasks.map((t, index) => {
-                        const baseT = cpmData.tasks.find(x => x.id === t.id) || t;
-                      
+                    {displayedGanttTasks.map((t) => {
+                      const baseT = baseTaskMap.get(String(t.id)) || t;
+
                       const riskLeftPct = (t.earlyStart / (riskCpmData.projectDuration || 1)) * 100;
                       const riskWidthPct = (t.duration / (riskCpmData.projectDuration || 1)) * 100;
-                      
+
                       const baseLeftPct = (baseT.earlyStart / (riskCpmData.projectDuration || 1)) * 100;
                       const baseWidthPct = (baseT.duration / (riskCpmData.projectDuration || 1)) * 100;
-                      
+
                       const barColor = t.criticality === 1 ? 'var(--danger)' :
-                                       t.criticality === 2 ? '#f97316' : 
-                                       t.criticality === 3 ? '#eab308' : 
-                                       'var(--primary)';
-                      
+                        t.criticality === 2 ? '#f97316' :
+                        t.criticality === 3 ? '#eab308' :
+                        'var(--primary)';
+
                       const baseBarColor = baseT.criticality === 1 ? 'var(--danger)' :
-                                           baseT.criticality === 2 ? '#f97316' : 
-                                           baseT.criticality === 3 ? '#eab308' : 
-                                           'var(--primary)';
-                      
-                      const showRiskAsSolid = primaryView === 'risk-adjusted';
+                        baseT.criticality === 2 ? '#f97316' :
+                        baseT.criticality === 3 ? '#eab308' :
+                        'var(--primary)';
+
                       const activeCriticality = showRiskAsSolid ? t.criticality : baseT.criticality;
-                      
+
                       const textColor = activeCriticality === 1 ? '#991b1b' :
-                                        activeCriticality === 2 ? '#c2410c' : 
-                                        activeCriticality === 3 ? '#a16207' : 
-                                        'var(--text)';
-                                        
+                        activeCriticality === 2 ? '#c2410c' :
+                        activeCriticality === 3 ? '#a16207' :
+                        'var(--text)';
+
                       const fontWeight = activeCriticality ? 600 : 400;
                       const riskDelay = (t.riskDuration !== undefined) ? (t.riskDuration - t.originalDuration) : 0;
-                      
-                      // Solid Bar Style
+
                       const solidBarStyle = {
-                        height: '16px', 
+                        height: '16px',
                         top: '8px',
                         borderRadius: '4px',
                         opacity: 0.85,
                         pointerEvents: 'auto',
                         boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
                       };
-                      
-                      // Ghost Bar Style
+
                       const ghostBarStyle = {
-                        height: '24px', 
+                        height: '24px',
                         top: '4px',
                         border: '1px dashed var(--text-muted)',
                         borderRadius: '4px',
                         pointerEvents: 'auto',
                         background: 'transparent'
                       };
-                      
+
                       return (
                         <div key={t.id} style={{ display: 'flex', alignItems: 'center', height: '32px', borderRadius: '4px' }}>
-                          <div style={{ width: '250px', flexShrink: 0, paddingLeft: '8px', paddingRight: '16px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.9rem', color: textColor, fontWeight: fontWeight }}>
-                            {t.id}: {t.name}
+                          <div style={{ width: '250px', flexShrink: 0, paddingLeft: `${8 + (t.outlineLevel ?? 1) * 12}px`, paddingRight: '16px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.9rem', color: textColor, fontWeight: t.isSummary ? 'bold' : fontWeight, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            {t.isSummary && (
+                              <button
+                                onClick={() => toggleCollapse(t.id)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, width: '16px', color: 'inherit' }}
+                              >
+                                {collapsedTasks[t.id] ? '▶' : '▼'}
+                              </button>
+                            )}
+                            {!t.isSummary && <span style={{ width: '16px' }}></span>}
+                            <span>{t.id}: {t.name}</span>
                           </div>
                           <div style={{ flexGrow: 1, position: 'relative', height: '100%', borderLeft: '1px solid var(--border)' }}>
                             {/* Grid lines */}
                             <div style={{ position: 'absolute', left: '25%', top: 0, bottom: 0, borderLeft: '1px dashed var(--border)', opacity: 0.5 }} />
                             <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, borderLeft: '1px dashed var(--border)', opacity: 0.5 }} />
                             <div style={{ position: 'absolute', left: '75%', top: 0, bottom: 0, borderLeft: '1px dashed var(--border)', opacity: 0.5 }} />
-                            
+
                             {/* Original Schedule Bar */}
-                            <div 
-                              title={`Original Start: Day ${Math.round(baseT.earlyStart)}, Original Duration: ${Math.round(baseT.duration)}d`}
-                              style={{ 
-                                position: 'absolute', 
-                                left: `${baseLeftPct}%`, 
-                                width: `${Math.max(baseWidthPct, 0.5)}%`, 
+                            <div
+                              title={`Original Start: ${formatDate(baseT.earlyStartDate)} (Day ${Math.round(baseT.earlyStart)})\nOriginal Duration: ${Math.round(baseT.duration)}d\nOriginal Finish: ${formatDate(baseT.earlyFinishDate)}`}
+                              style={{
+                                position: 'absolute',
+                                left: `${baseLeftPct}%`,
+                                width: `${Math.max(baseWidthPct, 0.5)}%`,
                                 ...(!showRiskAsSolid ? { ...solidBarStyle, background: baseBarColor } : ghostBarStyle),
                                 zIndex: !showRiskAsSolid ? 2 : 1
-                              }} 
+                              }}
                             />
                             {/* Risk Adjusted Bar */}
-                            <div 
-                              title={`Risk-Adjusted Start: Day ${Math.round(t.earlyStart)}\nOriginal Duration: ${Math.round(t.originalDuration)}d\nRisk P80 Delay: +${Math.round(riskDelay)}d\nTotal Risk Duration: ${Math.round(t.duration)}d`}
-                              style={{ 
-                                position: 'absolute', 
-                                left: `${riskLeftPct}%`, 
-                                width: `${Math.max(riskWidthPct, 0.5)}%`, 
+                            <div
+                              title={`Risk-Adjusted Start: ${formatDate(t.earlyStartDate)} (Day ${Math.round(t.earlyStart)})\nRisk-Adjusted Finish: ${formatDate(t.earlyFinishDate)}\nOriginal Duration: ${Math.round(t.originalDuration)}d\nRisk P80 Delay: +${Math.round(riskDelay)}d\nTotal Risk Duration: ${Math.round(t.duration)}d`}
+                              style={{
+                                position: 'absolute',
+                                left: `${riskLeftPct}%`,
+                                width: `${Math.max(riskWidthPct, 0.5)}%`,
                                 ...(showRiskAsSolid ? { ...solidBarStyle, background: barColor } : ghostBarStyle),
                                 zIndex: showRiskAsSolid ? 2 : 1
-                              }} 
+                              }}
                             />
                           </div>
                         </div>
                       );
-                    })})()}
+                    })}
                   </div>
-                  
+
                 </div>
               </div>
             </div>
@@ -511,7 +645,7 @@ const ScheduleView = () => {
                   Est. Duration: <span style={{ color: 'var(--primary)' }}>{cpmData.projectDuration} days</span>
                 </span>
               </div>
-              
+
               <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                   <thead>
@@ -535,10 +669,10 @@ const ScheduleView = () => {
                             {t.id}: {t.name}
                           </td>
                           <td style={{ padding: '8px' }}>{t.duration}</td>
-                          <td style={{ padding: '8px' }}>{t.earlyStart}</td>
-                          <td style={{ padding: '8px' }}>{t.earlyFinish}</td>
-                          <td style={{ padding: '8px' }}>{t.lateStart}</td>
-                          <td style={{ padding: '8px' }}>{t.lateFinish}</td>
+                          <td style={{ padding: '8px' }}>{formatDate(t.earlyStartDate)}</td>
+                          <td style={{ padding: '8px' }}>{formatDate(t.earlyFinishDate)}</td>
+                          <td style={{ padding: '8px' }}>{formatDate(t.lateStartDate)}</td>
+                          <td style={{ padding: '8px' }}>{formatDate(t.lateFinishDate)}</td>
                           <td style={{ padding: '8px', fontWeight: 600 }}>{t.totalFloat}</td>
                           <td style={{ padding: '8px' }}>
                             {isCritical ? (
@@ -561,33 +695,35 @@ const ScheduleView = () => {
       {/* Mapping Modal */}
       {isMappingModalOpen && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100 }}>
-          <div className="card" style={{ width: '500px', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
-            <h2 style={{ marginTop: 0 }}>Map Risks to Task {mappingActiveTaskId}</h2>
-            <div style={{ overflowY: 'auto', flexGrow: 1, marginBottom: '1.5rem', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)', paddingTop: '1rem', paddingBottom: '1rem' }}>
+          <div className="card" style={{ width: '520px', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', gap: '0.75rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1.15rem' }}>Map Risks to Task {mappingActiveTaskId}</h3>
+              <div style={{ display: 'flex', gap: '0.4rem', flexShrink: 0 }}>
+                <button className="btn btn-secondary" style={{ padding: '0.3rem 0.65rem', fontSize: '0.85rem' }} onClick={() => setIsMappingModalOpen(false)}>Cancel</button>
+                <button className="btn btn-primary" style={{ padding: '0.3rem 0.75rem', fontSize: '0.85rem' }} onClick={handleSaveMapping}>Save</button>
+              </div>
+            </div>
+            <div style={{ overflowY: 'auto', flexGrow: 1, borderTop: '1px solid var(--border)', paddingTop: '0.65rem', paddingBottom: '0.65rem' }}>
               {risks.length === 0 ? (
-                <p style={{ color: 'var(--text-muted)' }}>No risks found in the Risk Register.</p>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No risks found in the Risk Register.</p>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {risks.map(r => (
-                    <label key={r.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer', padding: '8px', background: 'var(--surface-hover)', borderRadius: '4px' }}>
-                      <input 
-                        type="checkbox" 
+                    <label key={r.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer', padding: '6px 8px', background: 'var(--surface-hover)', borderRadius: '4px' }}>
+                      <input
+                        type="checkbox"
                         checked={mappingTempSelection.includes(r.id)}
                         onChange={() => handleToggleRiskSelection(r.id)}
-                        style={{ marginTop: '4px' }}
+                        style={{ marginTop: '3px' }}
                       />
                       <div>
-                        <div style={{ fontWeight: 600 }}>{r.id}: {r.title}</div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{r.description || 'No description'}</div>
+                        <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{r.userRiskId || r.id}: {r.title}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{r.description || 'No description'}</div>
                       </div>
                     </label>
                   ))}
                 </div>
               )}
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
-              <button className="btn btn-secondary" onClick={() => setIsMappingModalOpen(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleSaveMapping}>Save Mapping</button>
             </div>
           </div>
         </div>
