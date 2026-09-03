@@ -1,8 +1,13 @@
-/**
+import re
+
+with open('src/utils/layoutUtils.js', 'r') as f:
+    text = f.read()
+
+new_content = """/**
  * Normalizes and scales briefing layouts for the 100-column / 15px row-height grid.
  */
 export const normalizeBriefingLayout = (rawConfig) => {
-  if (!rawConfig) return { selectedItems: [], layout: [], gridCols: 100, rowHeight: 12 };
+  if (!rawConfig) return { selectedItems: [], layout: [], gridCols: 100, rowHeight: 15 };
   let layout = rawConfig.layout || [];
   
   const isLegacy = rawConfig.gridCols === 24 || !rawConfig.gridCols;
@@ -38,7 +43,11 @@ export const normalizeBriefingLayout = (rawConfig) => {
   return {
     ...rawConfig,
     gridCols: 100,
-    rowHeight: 12,
+    rowHeight: 15,
     layout
   };
 };
+"""
+
+with open('src/utils/layoutUtils.js', 'w') as f:
+    f.write(new_content)

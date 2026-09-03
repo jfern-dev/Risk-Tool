@@ -35,6 +35,20 @@ function AppContent({ fileKey }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [settings, setSettings] = useState(null);
+  const [sysInfo, setSysInfo] = useState({ username: '...', lastSync: 0, lastArchive: 0 });
+
+  useEffect(() => {
+    const fetchSysInfo = async () => {
+      try {
+        const res = await apiFetch('/api/system-info');
+        const data = await res.json();
+        if (data && !data.error) setSysInfo(data);
+      } catch (e) {}
+    };
+    fetchSysInfo();
+    const interval = setInterval(fetchSysInfo, 3000);
+    return () => clearInterval(interval);
+  }, [fileKey]);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -147,6 +161,19 @@ function AppContent({ fileKey }) {
                 <option value="csv">📑 Export to CSV</option>
                 <option value="print">🖨️ Export to PDF (Print)</option>
               </select>
+            </div>
+            
+            {/* System Info */}
+            <div style={{ display: 'flex', flexDirection: 'column', fontSize: '0.65rem', color: 'var(--text-muted)', borderLeft: '1px solid var(--border)', paddingLeft: '1rem' }}>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <span style={{ color: 'var(--primary-hover)' }}>👤 {sysInfo.username}</span>
+                <span title="Last Sync (Automerge)">
+                  🔄 {sysInfo.lastSync ? new Date(sysInfo.lastSync).toLocaleTimeString() : 'Never'}
+                </span>
+                <span title="Last Archive">
+                  📦 {sysInfo.lastArchive ? new Date(sysInfo.lastArchive).toLocaleTimeString() : 'Never'}
+                </span>
+              </div>
             </div>
           </div>
 

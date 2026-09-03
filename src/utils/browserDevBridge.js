@@ -414,6 +414,13 @@ if (typeof window !== 'undefined' && (!window.electron || !window.electron.ipcRe
   };
 
   const handleApiRequest = async ({ path: reqPath, method = 'GET', body }) => {
+    if (reqPath === '/api/system-info' && method === 'GET') {
+      return {
+        username: 'Browser User (Mock)',
+        lastSync: Date.now(),
+        lastArchive: Date.now() - 3600000
+      };
+    }
     if (reqPath === '/api/dashboardSettings' && method === 'GET') {
       if (!appData.dashboardSettings) appData.dashboardSettings = { hiddenFields: [] };
       if (!appData.dashboardSettings.picklists) {

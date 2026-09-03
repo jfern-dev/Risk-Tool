@@ -10,7 +10,7 @@
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "electron:dev": "concurrently \"vite\" \"wait-on tcp:5173 && electron .\"",
+    "electron:dev": "concurrently \"vite\" \"wait-on tcp:5173 && electron . --no-sandbox\"",
     "electron:build": "vite build && electron-builder"
   },
   "build": {
@@ -59,6 +59,7 @@
     ]
   },
   "dependencies": {
+    "@automerge/automerge": "^3.4.1",
     "adm-zip": "^0.6.0",
     "date-fns": "^4.4.0",
     "electron-updater": "^6.8.9",

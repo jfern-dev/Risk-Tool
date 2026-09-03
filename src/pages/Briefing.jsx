@@ -119,8 +119,8 @@ export default function Briefing() {
                 layout={staticLayout}
                 gridConfig={{
                   cols: 24,
-                  rowHeight: 15,
-                  margin: [8, 8]
+                  rowHeight: 12,
+                  margin: [2, 2]
                 }}
                 dragConfig={{
                   enabled: false
@@ -128,9 +128,9 @@ export default function Briefing() {
                 resizeConfig={{
                   enabled: false
                 }}
-                cols={24}
-                rowHeight={15}
-                margin={[8, 8]}
+                cols={100}
+                rowHeight={12}
+                margin={[2, 2]}
                 width={width}
                 isDraggable={false}
                 isResizable={false}

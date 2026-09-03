@@ -10,30 +10,30 @@ import { normalizeBriefingLayout } from '../utils/layoutUtils';
 import BriefingWidgetContent, { SAMPLE_BRIEFING_RISK } from '../components/BriefingWidgetContent';
 
 const WIDGET_TYPES = [
-  { id: 'title', label: 'Title & Core Details', defaultW: 4, defaultH: 4 },
-  { id: 'matrix', label: 'Risk Matrix', defaultW: 4, defaultH: 4 },
-  { id: 'scores', label: 'Calculated Scores (Initial, Current, Target)', defaultW: 4, defaultH: 4 },
-  { id: 'description', label: 'Description', defaultW: 4, defaultH: 4 },
-  { id: 'mitigation', label: 'Mitigation Plan', defaultW: 4, defaultH: 4 },
-  { id: 'impact', label: 'Impact Statement', defaultW: 4, defaultH: 4 },
-  { id: 'closure', label: 'Closure Criteria', defaultW: 4, defaultH: 4 },
-  { id: 'categoryHandling', label: 'Category & Strategy', defaultW: 4, defaultH: 4 },
-  { id: 'gpocsCpocs', label: 'GPOCs & CPOCs', defaultW: 4, defaultH: 4 },
-  { id: 'dates', label: 'Important Dates', defaultW: 4, defaultH: 4 },
-  { id: 'impactDetails', label: 'Impact (Cost/Schedule/Perf)', defaultW: 4, defaultH: 4 },
-  { id: 'resourceDetails', label: 'Resources & Plan Realism', defaultW: 4, defaultH: 4 },
-  { id: 'customFields', label: 'Custom Fields', defaultW: 4, defaultH: 4 },
-  { id: 'spof', label: 'SPOF Alert', defaultW: 4, defaultH: 4 },
-  { id: 'statusLogs', label: 'Status Logs', defaultW: 4, defaultH: 4 },
-  { id: 'burndownPlot', label: 'Burndown Plot (Timeline Chart)', defaultW: 4, defaultH: 4 },
-  { id: 'actionList', label: 'Action List (Burndown Table)', defaultW: 4, defaultH: 4 },
-  { id: 'burndown', label: 'Burndown Plot & Actions (Full View)', defaultW: 4, defaultH: 4 },
-  { id: 'monteCarlo', label: 'Monte Carlo Summary', defaultW: 4, defaultH: 4 }
+  { id: 'title', label: 'Title & Core Details', defaultW: 17, defaultH: 4 },
+  { id: 'matrix', label: 'Risk Matrix', defaultW: 17, defaultH: 4 },
+  { id: 'scores', label: 'Calculated Scores (Initial, Current, Target)', defaultW: 17, defaultH: 4 },
+  { id: 'description', label: 'Description', defaultW: 17, defaultH: 4 },
+  { id: 'mitigation', label: 'Mitigation Plan', defaultW: 17, defaultH: 4 },
+  { id: 'impact', label: 'Impact Statement', defaultW: 17, defaultH: 4 },
+  { id: 'closure', label: 'Closure Criteria', defaultW: 17, defaultH: 4 },
+  { id: 'categoryHandling', label: 'Category & Strategy', defaultW: 17, defaultH: 4 },
+  { id: 'gpocsCpocs', label: 'GPOCs & CPOCs', defaultW: 17, defaultH: 4 },
+  { id: 'dates', label: 'Important Dates', defaultW: 17, defaultH: 4 },
+  { id: 'impactDetails', label: 'Impact (Cost/Schedule/Perf)', defaultW: 17, defaultH: 4 },
+  { id: 'resourceDetails', label: 'Resources & Plan Realism', defaultW: 17, defaultH: 4 },
+  { id: 'customFields', label: 'Custom Fields', defaultW: 17, defaultH: 4 },
+  { id: 'spof', label: 'SPOF Alert', defaultW: 17, defaultH: 4 },
+  { id: 'statusLogs', label: 'Status Logs', defaultW: 17, defaultH: 4 },
+  { id: 'burndownPlot', label: 'Burndown Plot (Timeline Chart)', defaultW: 17, defaultH: 4 },
+  { id: 'actionList', label: 'Action List (Burndown Table)', defaultW: 17, defaultH: 4 },
+  { id: 'burndown', label: 'Burndown Plot & Actions (Full View)', defaultW: 17, defaultH: 4 },
+  { id: 'monteCarlo', label: 'Monte Carlo Summary', defaultW: 17, defaultH: 4 }
 ];
 
 export default function BriefingAdmin() {
   const [risks, setRisks] = useState([]);
-  const [config, setConfig] = useState({ selectedItems: [], layout: [], gridCols: 24, rowHeight: 15 });
+  const [config, setConfig] = useState({ selectedItems: [], layout: [], gridCols: 100, rowHeight: 12 });
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('layout'); // 'layout' or 'selection'
   
@@ -71,7 +71,7 @@ export default function BriefingAdmin() {
 
   const handleSave = async () => {
     try {
-      const payload = { ...config, gridCols: 24, rowHeight: 15 };
+      const payload = { ...config, gridCols: 100, rowHeight: 12 };
       await apiFetch('/api/briefingConfig', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -102,16 +102,16 @@ export default function BriefingAdmin() {
       const rowIdx = Math.floor(idx / 6);
       return {
         ...item,
-        x: colIdx * 4,
+        x: colIdx * 16,
         y: rowIdx * 4,
-        w: 4,
+        w: 16,
         h: 4,
         minW: 1,
         minH: 1
       };
     });
     setConfig(prev => ({ ...prev, layout: tiled }));
-    toast.success('Arranged all widgets in a 6-across (4x4) grid');
+    toast.success('Arranged all widgets in a 6-across (16x4) grid');
   };
 
   const addWidget = (widgetId) => {
@@ -268,15 +268,15 @@ export default function BriefingAdmin() {
                     layout={config.layout || []}
                     gridConfig={{
                       cols: 24,
-                      rowHeight: 15,
-                      margin: [8, 8]
+                      rowHeight: 12,
+                      margin: [2, 2]
                     }}
                     dragConfig={{
                       draggableHandle: '.drag-handle'
                     }}
-                    cols={24}
-                    rowHeight={15}
-                    margin={[8, 8]}
+                    cols={100}
+                    rowHeight={12}
+                    margin={[2, 2]}
                     width={width}
                     onLayoutChange={onLayoutChange}
                     draggableHandle=".drag-handle"

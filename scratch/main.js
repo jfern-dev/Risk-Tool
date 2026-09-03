@@ -56,83 +56,12 @@ async function cleanupWorkDir() {
 
 app.on('will-quit', () => cleanupWorkDir());
 
-let lastSyncTime = 0;
 const autoSaveToTemp = async () => {
   try {
     const binary = Automerge.save(appData);
     await fs.writeFile(path.join(workDir, 'temp.am'), binary);
-    lastSyncTime = Date.now();
   } catch (error) {
     console.error('Error auto-saving to temp:', error);
-  }
-};
-
-let lastArchiveTime = 0;
-let hasCheckedDiskForArchives = false;
-
-const autoArchive = async () => {
-  if (!currentFilePath) return;
-
-  const archiveDir = path.join(path.dirname(currentFilePath), 'archives');
-  
-  if (!hasCheckedDiskForArchives) {
-    try {
-      await fs.mkdir(archiveDir, { recursive: true });
-      const files = await fs.readdir(archiveDir);
-      for (const file of files) {
-        if (!file.endsWith('.erm')) continue;
-        const stats = await fs.stat(path.join(archiveDir, file));
-        if (stats.mtimeMs > lastArchiveTime) {
-          lastArchiveTime = stats.mtimeMs;
-        }
-      }
-    } catch (e) {}
-    hasCheckedDiskForArchives = true;
-  }
-
-  const now = Date.now();
-  if (now - lastArchiveTime < 60 * 60 * 1000) {
-    return; // Has been archived in the past hour
-  }
-
-  try {
-    await fs.mkdir(archiveDir, { recursive: true });
-    const zip = new AdmZip();
-    
-    const configData = {
-      dashboardSettings: appData.dashboardSettings,
-      briefingConfig: appData.briefingConfig || { selectedItems: [], layout: [] }
-    };
-    const adminData = {
-      fields: appData.fields,
-      snapshots: appData.snapshots
-    };
-    
-    zip.addFile('Config.json', Buffer.from(JSON.stringify(configData, null, 2)));
-    zip.addFile('Admin.json', Buffer.from(JSON.stringify(adminData, null, 2)));
-    zip.addFile('RIO.json', Buffer.from(JSON.stringify(appData.risks || [], null, 2)));
-    zip.addFile('Schedule.json', Buffer.from(JSON.stringify(appData.schedule || { tasks: [], dependencies: [] }, null, 2)));
-    zip.addFile('RIO-Schedule.json', Buffer.from(JSON.stringify(appData.mapping || [], null, 2)));
-    zip.addFile('Monte-Carlo.json', Buffer.from(JSON.stringify(appData.simulationCache || null, null, 2)));
-    
-    // Add attachments if any exist in the temp workDir
-    try {
-      const attachmentDir = path.join(workDir, 'attachments');
-      const attachments = await fs.readdir(attachmentDir);
-      if (attachments.length > 0) {
-        zip.addLocalFolder(attachmentDir, 'attachment');
-      }
-    } catch (e) {}
-
-    const baseName = path.basename(currentFilePath, path.extname(currentFilePath));
-    const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
-    const archivePath = path.join(archiveDir, `${baseName}_${timestamp}.erm`);
-    
-    zip.writeZip(archivePath);
-    lastArchiveTime = now;
-    console.log(`Successfully auto-archived to ${archivePath}`);
-  } catch (error) {
-    console.error('Error creating auto-archive:', error);
   }
 };
 
@@ -160,9 +89,6 @@ const handleSave = async (isSaveAs = false) => {
 };
 
 const handleOpenFile = async (filePath = null) => {
-  lastArchiveTime = 0;
-  lastSyncTime = Date.now();
-  hasCheckedDiskForArchives = false;
   if (!filePath) {
     const result = await dialog.showOpenDialog(mainWindow, {
       title: 'Open Workspace',
@@ -644,7 +570,7 @@ ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => 
     
     // PUT /api/dashboardSettings
     if (reqPath === '/api/dashboardSettings' && method === 'PUT') {
-      appData.dashboardSettings = { ...appData.dashboardSettings, ...body };
+      updateData('Updated dashboard settings', doc => { doc.dashboardSettings = { ...doc.dashboardSettings, ...body }; });
       await autoSaveToTemp();
       return appData.dashboardSettings;
     }
@@ -656,7 +582,7 @@ ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => 
 
     // PUT /api/schedule
     if (reqPath === '/api/schedule' && method === 'PUT') {
-      appData.schedule = body;
+      updateData('Updated schedule', doc => { doc.schedule = body; });
       await autoSaveToTemp();
       return appData.schedule;
     }
@@ -668,7 +594,7 @@ ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => 
 
     // PUT /api/mapping
     if (reqPath === '/api/mapping' && method === 'PUT') {
-      appData.mapping = body;
+      updateData('Updated risk mapping', doc => { doc.mapping = body; });
       await autoSaveToTemp();
       return appData.mapping;
     }
@@ -682,7 +608,7 @@ ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => 
     // PUT /api/simulationCache
     if (reqPath === '/api/simulationCache' && method === 'PUT') {
       console.log('PUT /api/simulationCache saving body keys:', Object.keys(body));
-      appData.simulationCache = body;
+      updateData('Updated simulation cache', doc => { doc.simulationCache = body; });
       await autoSaveToTemp();
       return appData.simulationCache;
     }
@@ -694,7 +620,7 @@ ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => 
 
     // PUT /api/briefingConfig
     if (reqPath === '/api/briefingConfig' && method === 'PUT') {
-      appData.briefingConfig = body;
+      updateData('Updated briefing config', doc => { doc.briefingConfig = body; });
       await autoSaveToTemp();
       return appData.briefingConfig;
     }
@@ -800,7 +726,7 @@ ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => 
       delete cleanBody._isRestore;
       delete cleanBody.restoredDate;
 
-      appData.risks[idx] = { ...appData.risks[idx], ...cleanBody, updatedAt: new Date().toISOString() };
+      updateData(`Updated risk ${id}`, doc => { doc.risks[idx] = { ...doc.risks[idx], ...cleanBody, updatedAt: new Date().toISOString() }; });
       await autoSaveToTemp();
       return appData.risks[idx];
     }
@@ -859,22 +785,12 @@ ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => 
       const id = parseInt(match[1]);
       const idx = appData.risks.findIndex(r => r.id === id);
       if (idx === -1) throw new Error('Risk not found');
-      updateData(`Deleted risk ${id}`, doc => {
-        doc.risks.splice(idx, 1);
-        if (doc.mapping) {
-          doc.mapping = doc.mapping.filter(m => m.riskId !== id);
-        }
-      });
+      appData.risks.splice(idx, 1);
+      if (appData.mapping) {
+        appData.mapping = appData.mapping.filter(m => m.riskId !== id);
+      }
+      await autoSaveToTemp();
       return { success: true };
-    }
-
-    // GET /api/system-info
-    if (reqPath === '/api/system-info' && method === 'GET') {
-      return {
-        username: getUsername(),
-        lastSync: lastSyncTime,
-        lastArchive: lastArchiveTime
-      };
     }
 
     // GET /api/fields
@@ -892,18 +808,16 @@ ipcMain.handle('api-request', async (event, { path: reqPath, method, body }) => 
     // POST /api/fields
     if (reqPath === '/api/fields' && method === 'POST') {
       const newField = { id: generateId(appData.fields), ...body, createdAt: new Date().toISOString() };
-      updateData('Created custom field', doc => {
-        doc.fields.push(newField);
-      });
+      appData.fields.push(newField);
+      await autoSaveToTemp();
       return newField;
     }
     // DELETE /api/fields/:id
     match = reqPath.match(/^\/api\/fields\/(\d+)$/);
     if (match && method === 'DELETE') {
       const id = parseInt(match[1]);
-      updateData(`Deleted custom field ${id}`, doc => {
-        doc.fields = doc.fields.filter(f => f.id !== id);
-      });
+      appData.fields = appData.fields.filter(f => f.id !== id);
+      await autoSaveToTemp();
       return { success: true };
     }
 
