@@ -160,6 +160,7 @@ function AppContent({ fileKey }) {
                 <option value="snapshot">📸 Create Global Snapshot...</option>
                 <option value="csv">📑 Export to CSV</option>
                 <option value="print">🖨️ Export to PDF (Print)</option>
+                <option value="pptx">📽️ Export to PPTX</option>
               </select>
             </div>
             

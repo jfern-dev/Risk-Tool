@@ -7,6 +7,7 @@ import os from 'os';
 import AdmZip from 'adm-zip';
 import { execFile } from 'child_process';
 import util from 'util';
+import { findJavaExecutable, getClassPath } from './javaDetector.js';
 
 const execFileAsync = util.promisify(execFile);
 
@@ -300,8 +301,7 @@ const handleOpenFile = async (filePath = null) => {
       dialog.showErrorBox('Open Error', `Could not open file: ${error.message}`);
       return false;
     }
-  return false;
-};
+  };
 
 const handleNewFile = async () => {
   appData = { 
@@ -531,28 +531,30 @@ ipcMain.handle('api-import-mpp', async () => {
   const scriptsDir = path.join(__dirname, '..', 'scripts').replace('app.asar', 'app.asar.unpacked');
   
   try {
-    const candidateJavaPaths = [
-      '/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home/bin/java',
-      '/opt/homebrew/bin/java',
-      path.join(os.homedir(), '.sdkman/candidates/java/current/bin/java'),
-      path.join(os.homedir(), '.sdkman/candidates/java/21.0.2-tem/bin/java'),
-      '/usr/bin/java'
-    ];
-    let javaExec = 'java';
-    for (const candidate of candidateJavaPaths) {
-      try {
-        await fs.stat(candidate);
-        javaExec = candidate;
-        break;
-      } catch (e) {
-        // continue searching
+    const javaExec = await findJavaExecutable(scriptsDir);
+    if (!javaExec) {
+      console.error('Java executable not found for MPP parsing.');
+      const response = await dialog.showMessageBox(mainWindow, {
+        type: 'warning',
+        buttons: ['Download Java (Adoptium)', 'Cancel'],
+        defaultId: 0,
+        cancelId: 1,
+        title: 'Java Required for MPP Import',
+        message: 'Java (JRE or JDK 21+) is required to parse Microsoft Project (.mpp) files.',
+        detail: 'Could not find a valid Java installation on your computer.\n\nPlease install Java 21 or higher (available free from Eclipse Adoptium) and try again.'
+      });
+      if (response.response === 0) {
+        shell.openExternal('https://adoptium.net/temurin/releases/?version=21');
       }
+      return null;
     }
-    
-    // Classpath must include the lib folder jars and the scripts dir
-    const classPath = path.join(scriptsDir, 'lib', '*') + path.delimiter + scriptsDir;
-    
-    const { stdout } = await execFileAsync(javaExec, ['-cp', classPath, 'ParseMPP', filePath], { maxBuffer: 1024 * 1024 * 50 }); // 50MB buffer
+
+    const classPath = await getClassPath(scriptsDir);
+
+    const { stdout } = await execFileAsync(javaExec, ['-cp', classPath, 'ParseMPP', filePath], { 
+      maxBuffer: 1024 * 1024 * 50,
+      windowsHide: true
+    });
     const jsonStartIndex = stdout.indexOf('{');
     if (jsonStartIndex === -1) {
       throw new Error("No JSON found in java output: " + stdout);
@@ -571,7 +573,11 @@ ipcMain.handle('api-import-mpp', async () => {
   } catch (error) {
     console.error('MPP Parse Error:', error);
     let errorMsg = error.message;
-    if (error.stdout && error.stdout.includes('{')) {
+    if (error.code === 'ENOENT') {
+      errorMsg = 'Java executable not found. Please verify Java (JRE/JDK 21+) is installed or set JAVA_HOME.';
+    } else if (error.message && error.message.includes('UnsupportedClassVersionError')) {
+      errorMsg = 'Java 21 or higher is required to parse MS Project (.mpp) files. Your system Java version is older.';
+    } else if (error.stdout && error.stdout.includes('{')) {
       try {
         const jsonStr = error.stdout.substring(error.stdout.indexOf('{'));
         const parsed = JSON.parse(jsonStr);

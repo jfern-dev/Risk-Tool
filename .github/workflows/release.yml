@@ -32,6 +32,24 @@ jobs:
       - name: Build frontend
         run: npx vite build
 
+      - name: Download and Bundle Windows JRE
+        shell: pwsh
+        run: |
+          Write-Host "Downloading Adoptium Temurin JRE 21 for Windows x64..."
+          $jreZip = "$env:TEMP\jre.zip"
+          $jreExtract = "$env:TEMP\jre-extracted"
+          Invoke-WebRequest -Uri "https://api.adoptium.net/v3/binary/latest/21/ga/windows/x64/jre/hotspot/normal/eclipse" -OutFile $jreZip
+          Write-Host "Extracting JRE..."
+          Expand-Archive -Path $jreZip -DestinationPath $jreExtract
+          $extractedDir = Get-ChildItem -Path $jreExtract -Directory | Select-Object -First 1
+          Write-Host "Found extracted JRE folder: $($extractedDir.FullName)"
+          New-Item -ItemType Directory -Force -Path "scripts/jre"
+          Copy-Item -Path "$($extractedDir.FullName)/*" -Destination "scripts/jre" -Recurse -Force
+          Remove-Item -Path $jreZip -Force -ErrorAction SilentlyContinue
+          Remove-Item -Path $jreExtract -Recurse -Force -ErrorAction SilentlyContinue
+          Write-Host "Verifying bundled java.exe:"
+          & "scripts/jre/bin/java.exe" -version
+
       - name: Build Windows installer
         run: npx electron-builder --win --publish never
         env:

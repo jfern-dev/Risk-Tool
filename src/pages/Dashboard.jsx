@@ -19,7 +19,8 @@ import {
   ShieldAlert, 
   Sparkles, 
   Layers,
-  X
+  X,
+  Presentation
 } from 'lucide-react';
 import RiskMatrix, { getScoreClass, getOppScoreClass, getIssueScoreClass } from '../components/RiskMatrix';
 import RiskFormModal from '../components/RiskFormModal';
@@ -32,6 +33,7 @@ import RiskDetailsModal from '../components/RiskDetailsModal';
 import PdfReport from '../components/PdfReport';
 import { toast } from 'react-hot-toast';
 import { apiFetch } from '../utils/api';
+import { exportRisksToPptx, exportRiskToPptx } from '../utils/pptxExport';
 
 const Dashboard = () => {
   const [risks, setRisks] = useState([]);
@@ -70,13 +72,21 @@ const Dashboard = () => {
       setTimeout(() => window.print(), 100);
     };
     window.addEventListener('print-single-risk', handlePrintSingle);
+
+    const handlePptxSingle = (e) => {
+      const riskId = typeof e.detail === 'object' ? e.detail.id : e.detail;
+      const targetRisk = risks.find(r => r.id === riskId) || (typeof e.detail === 'object' ? e.detail : null);
+      if (targetRisk) exportRiskToPptx(targetRisk);
+    };
+    window.addEventListener('pptx-single-risk', handlePptxSingle);
     
     return () => {
       window.removeEventListener('beforeprint', handleBeforePrint);
       window.removeEventListener('afterprint', handleAfterPrint);
       window.removeEventListener('print-single-risk', handlePrintSingle);
+      window.removeEventListener('pptx-single-risk', handlePptxSingle);
     };
-  }, []);
+  }, [risks]);
 
   const loadData = async () => {
     try {
@@ -221,19 +231,6 @@ const Dashboard = () => {
     URL.revokeObjectURL(url);
   }, [risks]);
 
-  useEffect(() => {
-    const handleAppAction = (e) => {
-      const action = e.detail;
-      if (action === 'snapshot') setIsGlobalSnapshotModalOpen(true);
-      if (action === 'csv') handleExportCSV();
-      if (action === 'print') window.print();
-    };
-    window.addEventListener('app-action', handleAppAction);
-    return () => window.removeEventListener('app-action', handleAppAction);
-  }, [risks, snapshots, fields, selectedSnapshotId, handleExportCSV]);
-
-  if (loading) return <div className="container" style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-muted)' }}>Loading ERM Workspace...</div>;
-
   const currentSnapshotRisks = selectedSnapshotId === 'current' 
     ? risks 
     : snapshots.find(s => s.id === parseInt(selectedSnapshotId))?.risks || [];
@@ -248,6 +245,23 @@ const Dashboard = () => {
       (r.cpocs && r.cpocs.toLowerCase().includes(searchQuery.toLowerCase()));
     return typeMatch && levelMatch && searchMatch;
   });
+
+  useEffect(() => {
+    const handleAppAction = (e) => {
+      const action = e.detail;
+      if (action === 'snapshot') setIsGlobalSnapshotModalOpen(true);
+      if (action === 'csv') handleExportCSV();
+      if (action === 'print') window.print();
+      if (action === 'pptx') {
+        const title = activeItemType === 'All' ? 'All Governance Items' : `${activeItemType} Register`;
+        exportRisksToPptx(displayRisks, title);
+      }
+    };
+    window.addEventListener('app-action', handleAppAction);
+    return () => window.removeEventListener('app-action', handleAppAction);
+  }, [risks, snapshots, fields, selectedSnapshotId, handleExportCSV, displayRisks, activeItemType]);
+
+  if (loading) return <div className="container" style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-muted)' }}>Loading ERM Workspace...</div>;
 
   const comparisonSnapshot = snapshots.length > 0 ? snapshots[snapshots.length - 1] : null;
 
@@ -385,6 +399,19 @@ const Dashboard = () => {
                 </option>
               ))}
             </select>
+
+            <button 
+              className="btn" 
+              style={{ background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--border)', color: 'var(--text)' }}
+              onClick={() => {
+                const title = activeItemType === 'All' ? 'All Governance Items' : `${activeItemType} Register`;
+                exportRisksToPptx(displayRisks, title);
+              }}
+              title="Export displayed items to PowerPoint (.pptx)"
+            >
+              <Presentation size={15} />
+              Export PPTX
+            </button>
 
             <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
               <PlusCircle size={15} />

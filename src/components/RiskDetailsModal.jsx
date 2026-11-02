@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, Pencil, TrendingDown, Camera, Clock, FileText } from 'lucide-react';
+import { X, Pencil, TrendingDown, Camera, Clock, FileText, Presentation } from 'lucide-react';
 import RiskMatrix from './RiskMatrix';
 import RiskTimeline from './RiskTimeline';
 import { apiFetch } from '../utils/api';
+import { exportRiskToPptx } from '../utils/pptxExport';
 
 const RiskDetailsModal = ({ risk, onClose, onActionClick }) => {
   const [fieldDefs, setFieldDefs] = useState([]);
@@ -78,6 +79,9 @@ const RiskDetailsModal = ({ risk, onClose, onActionClick }) => {
             window.dispatchEvent(new CustomEvent('print-single-risk', { detail: risk.id }));
           }}>
             <FileText size={14} style={{ marginRight: '4px' }} /> Print to PDF
+          </button>
+          <button className="btn" style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', padding: '0.3rem 0.65rem', fontSize: '0.8rem' }} onClick={() => exportRiskToPptx(risk)}>
+            <Presentation size={14} style={{ marginRight: '4px' }} /> Save to PPTX
           </button>
         </div>
 

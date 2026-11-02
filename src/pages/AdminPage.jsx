@@ -1433,16 +1433,29 @@ export default function AdminPage() {
                   </p>
                 </div>
 
-                <button
-                  className="btn btn-primary"
-                  onClick={() => {
-                    window.dispatchEvent(new CustomEvent('app-action', { detail: 'csv' }));
-                    toast.success('Generating CSV export...');
-                  }}
-                >
-                  <Download size={15} style={{ marginRight: '6px' }} />
-                  Trigger CSV Export Now
-                </button>
+                <div style={{ display: 'flex', gap: '0.65rem' }}>
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => {
+                      window.dispatchEvent(new CustomEvent('app-action', { detail: 'csv' }));
+                      toast.success('Generating CSV export...');
+                    }}
+                  >
+                    <Download size={15} style={{ marginRight: '6px' }} />
+                    Trigger CSV Export Now
+                  </button>
+
+                  <button
+                    className="btn btn-primary"
+                    style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)' }}
+                    onClick={() => {
+                      window.dispatchEvent(new CustomEvent('app-action', { detail: 'pptx' }));
+                    }}
+                  >
+                    <Presentation size={15} style={{ marginRight: '6px' }} />
+                    Trigger PPTX Export Now
+                  </button>
+                </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', marginBottom: '1.75rem' }}>

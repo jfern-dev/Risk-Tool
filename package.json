@@ -1,7 +1,7 @@
 {
   "name": "risk-tool",
   "private": true,
-  "version": "7.1.0",
+  "version": "7.1.1",
   "repository": "https://github.com/jfern-dev/Risk-Tool",
   "main": "electron/main.js",
   "type": "module",
@@ -10,6 +10,7 @@
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview",
+    "dev:debug": "xvfb-run -a electron . --remote-debugging-port=9222",
     "electron:dev": "concurrently \"vite\" \"wait-on tcp:5173 && electron . --no-sandbox\"",
     "electron:build": "vite build && electron-builder"
   },
@@ -30,8 +31,7 @@
         {
           "target": "nsis",
           "arch": [
-            "x64",
-            "ia32"
+            "x64"
           ]
         }
       ]
@@ -65,6 +65,7 @@
     "electron-updater": "^6.8.9",
     "jszip": "^3.10.1",
     "lucide-react": "^1.30.0",
+    "pptxgenjs": "^4.0.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-grid-layout": "^2.2.4",

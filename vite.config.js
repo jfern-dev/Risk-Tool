@@ -6,6 +6,7 @@ import os from 'os';
 import { execFile } from 'child_process';
 import util from 'util';
 import { fileURLToPath } from 'url';
+import { findJavaExecutable, getClassPath } from './electron/javaDetector.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -27,29 +28,21 @@ function mppParserPlugin() {
           try {
             await fs.writeFile(tempPath, buffer);
 
-            const candidateJavaPaths = [
-              '/home/fern/.sdkman/candidates/java/21.0.2-tem/bin/java',
-              path.join(os.homedir(), '.sdkman/candidates/java/current/bin/java'),
-              path.join(os.homedir(), '.sdkman/candidates/java/21.0.2-tem/bin/java'),
-              '/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home/bin/java',
-              '/opt/homebrew/bin/java',
-              '/usr/bin/java'
-            ];
+            const scriptsDir = path.resolve(__dirname, 'scripts');
+            const javaExec = await findJavaExecutable(scriptsDir);
 
-            let javaExec = 'java';
-            for (const cand of candidateJavaPaths) {
-              try {
-                await fs.stat(cand);
-                javaExec = cand;
-                break;
-              } catch {}
+            if (!javaExec) {
+              throw new Error(
+                'Java (JRE/JDK 21+) is required to parse MS Project (.mpp) files, but was not found. ' +
+                'Please install Java 21+ from https://adoptium.net or set JAVA_HOME.'
+              );
             }
 
-            const scriptsDir = path.resolve(__dirname, 'scripts');
-            const classPath = path.join(scriptsDir, 'lib', '*') + path.delimiter + scriptsDir;
+            const classPath = await getClassPath(scriptsDir);
 
             const { stdout } = await execFileAsync(javaExec, ['-cp', classPath, 'ParseMPP', tempPath], {
-              maxBuffer: 1024 * 1024 * 50
+              maxBuffer: 1024 * 1024 * 50,
+              windowsHide: true
             });
 
             const jsonStartIndex = stdout.indexOf('{');
@@ -69,9 +62,15 @@ function mppParserPlugin() {
             res.end(JSON.stringify(parsed));
           } catch (err) {
             console.error('MPP Dev Parser error:', err);
+            let errMsg = err.message || 'Failed to parse MPP file';
+            if (err.code === 'ENOENT') {
+              errMsg = 'Java executable not found. Please install Java 21+ or set JAVA_HOME.';
+            } else if (err.message && err.message.includes('UnsupportedClassVersionError')) {
+              errMsg = 'Java 21 or higher is required to parse MS Project (.mpp) files.';
+            }
             res.setHeader('Content-Type', 'application/json');
             res.statusCode = 500;
-            res.end(JSON.stringify({ error: err.message || 'Failed to parse MPP file' }));
+            res.end(JSON.stringify({ error: errMsg }));
           } finally {
             await fs.unlink(tempPath).catch(() => {});
           }
@@ -87,7 +86,8 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
-    allowedHosts: ['display.ferngroup.net']
+    host: '0.0.0.0',
+    allowedHosts: ['display.ferngroup.net', 'dev.ferngroup.net', 'localhost', '127.0.0.1']
   },
   plugins: [react(), mppParserPlugin()],
 });

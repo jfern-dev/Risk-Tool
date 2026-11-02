@@ -10,9 +10,8 @@ const PdfReport = ({ risks }) => {
     apiFetch('/api/dashboardSettings')
       .then(res => res.json())
       .then(data => {
-        if (data) {
-          setDashboardSettings(data);
-          if (data.hiddenFields) setHiddenFields(data.hiddenFields);
+        if (data && data.hiddenFields) {
+          setHiddenFields(data.hiddenFields);
         }
       }).catch(console.error);
   }, []);
